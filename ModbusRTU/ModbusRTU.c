@@ -76,13 +76,19 @@ static MODBUS_Status Handle_Read_Registers(MODBUS_Device *dev, const uint8_t *re
     {
         return MB_ERR_EXCEPTION;
     }
-
     // 校验地址范围
     if (start_addr + reg_num > dev->reg_count)
     {
         return MB_ERR_EXCEPTION;
     }
-
+    // 数据拷贝的同时增加读取计数
+    if (dev->read_count != NULL)
+    { // 允许不开启统计（传入NULL）
+        for (uint16_t i = 0; i < reg_num; i++)
+        {
+            dev->read_count[start_addr + i]++; // 每个被读到的寄存器，次数+1
+        }
+    }
     // 构建正常响应：地址 + 功能码 + 字节数 + 数据... + CRC
     rsp[0] = dev->slave_id;
     rsp[1] = 0x03;
@@ -120,7 +126,13 @@ static MODBUS_Status Handle_Write_Register(MODBUS_Device *dev, const uint8_t *re
     {
         return MB_ERR_EXCEPTION;
     }
-
+    // 写入数据的同时增加写入计数
+    if (dev->write_count != NULL)
+    {
+        dev->write_count[reg_addr]++; // 该寄存器被写入次数+1
+        // 写入后读取清零
+        dev->read_count[reg_addr] = 0;
+    }
     // 写入寄存器
     dev->holding_regs[reg_addr] = reg_val;
 
@@ -171,10 +183,17 @@ static MODBUS_Status Build_Response(MODBUS_Device *dev, const uint8_t *req, uint
 
 // -------------------- 公共接口函数实现 --------------------
 
-void MODBUS_Init(MODBUS_Device *dev, uint8_t slave_id, uint16_t *holding_regs, uint16_t reg_count)
+void MODBUS_Init(MODBUS_Device *dev,
+                 uint8_t slave_id,
+                 uint16_t *holding_regs,
+                 uint16_t *read_count,
+                 uint16_t *write_count,
+                 uint16_t reg_count)
 {
     dev->slave_id = slave_id;
     dev->holding_regs = holding_regs;
+    dev->read_count = read_count;
+    dev->write_count = write_count;
     dev->reg_count = reg_count;
 }
 

@@ -1,98 +1,169 @@
 #include "fsm_bootloader.h"
+#include <stddef.h>
 
-/* ========== 空壳业务函数（每个状态的具体动作） ========== */
-static void ModbusRecv_Entry(void)  { /* 初始化串口、启动定时器等 */ }
-static int  ModbusRecv_Do(void)     { return EVENT_NONE; /* 返回实际事件 */ }
-static void ModbusRecv_Exit(void)   { /* 停止定时器等清理 */ }
+extern volatile uint16_t Modbus_read_regs;
+extern volatile uint16_t Modbus_write_regs;
 
-static void ProgUpgrade_Entry(void) { /* 解锁 Flash */ }
-static int  ProgUpgrade_Do(void)    { return EVENT_BURN_NOT_COMPLETE; }
-static void ProgUpgrade_Exit(void)  { /* 锁定 Flash */ }
+#define TICK_PERIOD_MS 10                             // 每次Fsm_Run调用的间隔（毫秒）
+#define TIMEOUT_MS 5000                               // 超时时间（毫秒）
+#define TIMEOUT_PERIODS (TIMEOUT_MS / TICK_PERIOD_MS) // 500个周期
 
-static void JumpApp_Entry(void)     { /* 关中断、设 VTOR、加载 MSP 并跳转（不返回） */ }
-static int  JumpApp_Do(void)        { return EVENT_NONE; }
-static void JumpApp_Exit(void)      { }
+#define MODBUS_06_REC Modbus_write_regs[0]
+#define MODBUS_03_REC Modbus_read_regs[0]
 
-/* ========== 状态描述符表（每个状态对应一个 Fsm_Struct） ========== */
-static const Fsm_Struct state_descriptor[] = {
-    [STATE_MODBUS_RECV] = {
-        .state     = STATE_MODBUS_RECV,
-        .event     = EVENT_NONE,
-        .entry     = ModbusRecv_Entry,
-        .do_action = ModbusRecv_Do,
-        .exit      = ModbusRecv_Exit
-    },
-    [STATE_PROG_UPGRADE] = {
-        .state     = STATE_PROG_UPGRADE,
-        .event     = EVENT_NONE,
-        .entry     = ProgUpgrade_Entry,
-        .do_action = ProgUpgrade_Do,
-        .exit      = ProgUpgrade_Exit
-    },
-    [STATE_JUMP_APP] = {
-        .state     = STATE_JUMP_APP,
-        .event     = EVENT_NONE,
-        .entry     = JumpApp_Entry,
-        .do_action = JumpApp_Do,
-        .exit      = JumpApp_Exit
-    }
-};
-
-/* 当前状态指针，指向状态描述符表中的某一项 */
-static const Fsm_Struct *p_current = NULL;
-
-/* ========== 状态切换：先退出当前状态，再进入新状态 ========== */
-static void ChangeState(BootState new_state)
+// /* ============================================================
+//    外部硬件接口（用户需实现）
+//    ============================================================ */
+bool CheckAppValid(void)
 {
-    if (p_current && p_current->exit) {
-        p_current->exit();
-    }
-    p_current = &state_descriptor[new_state];
-    if (p_current->entry) {
-        p_current->entry();
-    }
+}
+// extern bool CheckNewAppValid(void);
+// extern void JumpToApp(void);
+// extern int Flash_GetStatus(void); // 0-烧写中，1-完成且有效，2-完成但无效
+
+static uint32_t s_tick = 0;           // 内部计数器，每次Fsm_Run递增
+static uint32_t timeout_deadline = 0; // 超时截止周期数（0表示未启动）
+
+typedef struct
+{
+    BootState src;
+    BootEvent evt;
+    BootState dst;
+} Transition;
+
+static const Transition trans_table[] = {
+    {STATE_MODBUS_RECV, EVENT_RECV_LEGAL_06H, STATE_PROG_UPGRADE},
+    {STATE_MODBUS_RECV, EVENT_TIMEOUT_APP_VALID, STATE_JUMP_APP},
+    {STATE_MODBUS_RECV, EVENT_TIMEOUT_APP_INVALID, STATE_MODBUS_RECV},
+    {STATE_PROG_UPGRADE, EVENT_BURN_COMPLETE_APP_VALID, STATE_JUMP_APP},
+    {STATE_PROG_UPGRADE, EVENT_BURN_COMPLETE_APP_INVALID, STATE_MODBUS_RECV},
+    {STATE_PROG_UPGRADE, EVENT_BURN_NOT_COMPLETE, STATE_MODBUS_RECV},
+};
+#define TRANS_COUNT (sizeof(trans_table) / sizeof(trans_table[0]))
+
+/* ============================================================
+   超时管理（内部函数）
+   ============================================================ */
+static void StartTimeout(void)
+{
+    timeout_deadline = s_tick + TIMEOUT_PERIODS;
 }
 
-/* ========== 初始化：设置初始状态并调用入口函数 ========== */
+static void StopTimeout(void)
+{
+    timeout_deadline = 0;
+}
+
+static bool IsTimeout(void)
+{
+    return (timeout_deadline != 0 && s_tick >= timeout_deadline);
+}
+
+/* ---------- Modbus接收 ---------- */
+static void ModbusRecv_Entry(void)
+{
+}
+static BootEvent ModbusRecv_Do(void)
+{
+}
+static void ModbusRecv_Exit(void)
+{
+}
+
+/* ---------- 程序升级 ---------- */
+static void ProgUpgrade_Entry(void)
+{
+}
+static BootEvent ProgUpgrade_Do(void)
+{
+}
+static void ProgUpgrade_Exit(void)
+{
+}
+
+/* ---------- 跳转APP ---------- */
+static void JumpApp_Entry(void)
+{
+}
+
+static BootEvent JumpApp_Do(void)
+{
+}
+static void JumpApp_Exit(void)
+{
+}
+
+static const Fsm_Struct state_descriptor[] = {
+    [STATE_MODBUS_RECV] = {
+        .state = STATE_MODBUS_RECV,
+        .entry = ModbusRecv_Entry,
+        .do_action = ModbusRecv_Do,
+        .exit = ModbusRecv_Exit},
+    [STATE_PROG_UPGRADE] = {.state = STATE_PROG_UPGRADE, .entry = ProgUpgrade_Entry, .do_action = ProgUpgrade_Do, .exit = ProgUpgrade_Exit},
+    [STATE_JUMP_APP] = {.state = STATE_JUMP_APP, .entry = JumpApp_Entry, .do_action = JumpApp_Do, .exit = JumpApp_Exit}};
+
+/* ============================================================
+   当前状态指针
+   ============================================================ */
+static const Fsm_Struct *p_current = NULL;
+
+/* ============================================================
+   辅助函数
+   ============================================================ */
+static BootState FindNextState(BootState cur, BootEvent evt)
+{
+    for (size_t i = 0; i < TRANS_COUNT; i++)
+    {
+        if (trans_table[i].src == cur && trans_table[i].evt == evt)
+            return trans_table[i].dst;
+    }
+    return cur;
+}
+
+static void ChangeState(BootState new_state)
+{
+    if (p_current && p_current->exit)
+        p_current->exit();
+    p_current = &state_descriptor[new_state];
+    if (p_current && p_current->entry)
+        p_current->entry();
+}
+
+/* ============================================================
+   公共API
+   ============================================================ */
 void Fsm_Init(void)
 {
+    s_tick = 0; // 重置计数器
     ChangeState(STATE_MODBUS_RECV);
 }
 
-/* ========== 运行状态机（单次轮询，由外部主循环调用） ========== */
 void Fsm_Run(void)
 {
-    if (!p_current) return;
+    if (!p_current)
+        return;
 
-    /* 执行当前状态的 do 动作，获取事件 */
-    BootEvent event = (BootEvent)(p_current->do_action ? p_current->do_action() : EVENT_NONE);
+    // 递增内部计数器（每次调用代表一个周期）
+    s_tick++;
 
-    /* 根据当前状态和事件进行跳转 */
-    switch (p_current->state) {
-        case STATE_MODBUS_RECV:
-            if (event == EVENT_RECV_LEGAL_06H) {
-                ChangeState(STATE_PROG_UPGRADE);
-            } else if (event == EVENT_TIMEOUT_APP_VALID) {
-                ChangeState(STATE_JUMP_APP);
-            } else if (event == EVENT_TIMEOUT_APP_INVALID) {
-                /* 仅重置定时器，不切换状态（此处可重新调用 entry 实现） */
-            }
-            break;
-
-        case STATE_PROG_UPGRADE:
-            if (event == EVENT_BURN_COMPLETE_APP_VALID) {
-                ChangeState(STATE_JUMP_APP);
-            } else if (event == EVENT_BURN_COMPLETE_APP_INVALID) {
-                ChangeState(STATE_MODBUS_RECV);
-            }
-            /* EVENT_BURN_NOT_COMPLETE 保持当前状态 */
-            break;
-
-        case STATE_JUMP_APP:
-            /* 瞬时态，不处理循环事件 */
-            break;
-
-        default:
-            break;
+    // 执行当前状态的do，获取事件
+    BootEvent evt = p_current->do_action ? p_current->do_action() : EVENT_NONE;
+    BootState next = FindNextState(p_current->state, evt);
+    if (next != p_current->state)
+    {
+        ChangeState(next);
     }
+    else
+    {
+        // 如果超时无效，需要重新进入当前状态以重置超时
+        if (evt == EVENT_TIMEOUT_APP_INVALID)
+        {
+            ChangeState(p_current->state);
+        }
+    }
+}
+
+bool Fsm_IsInState(BootState state)
+{
+    return (p_current != NULL && p_current->state == state);
 }

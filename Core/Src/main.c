@@ -25,6 +25,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "ModbusRTU.h"
+#include "fsm_bootloader.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -48,11 +49,14 @@
 
 /* USER CODE BEGIN PV */
 uint16_t Modbus_holding_regs[MODBUS_REG_COUNT] = {0};
+volatile uint16_t Modbus_read_regs[MODBUS_REG_COUNT] = {0};
+volatile uint16_t Modbus_write_regs[MODBUS_REG_COUNT] = {0};
 uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE];
 uint8_t modbus_tx_buffer[MODBUS_TX_BUFFER_SIZE];
 volatile uint16_t rx_len = 0;
 uint16_t tx_len = 0;
 MODBUS_Device Modbus_dev0;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -99,24 +103,28 @@ int main(void)
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
   HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE); // 开启串口空闲中断
-  MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, MODBUS_REG_COUNT);
+  MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs, Modbus_write_regs, MODBUS_REG_COUNT);
+  Fsm_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    if (rx_len > 0)
-    {
-      uint16_t len = rx_len; // 局部备份
-      rx_len = 0;            // 立即释放标志位，允许中断记录新帧
-      MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, modbus_rx_buffer, &len, modbus_tx_buffer, &tx_len);
-      if (sta == MB_OK)
-      {
-        HAL_UART_Transmit(&huart1, modbus_tx_buffer, tx_len, 0xffff);
-      }
-      HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
-    }
+    // if (rx_len > 0)
+    // {
+    //   uint16_t len = rx_len; // 局部备份
+    //   rx_len = 0;            // 立即释放标志位，允许中断记录新帧
+    //   MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, modbus_rx_buffer, &len, modbus_tx_buffer, &tx_len);
+    //   if (sta == MB_OK)
+    //   {
+    //     HAL_UART_Transmit(&huart1, modbus_tx_buffer, tx_len, 0xffff);
+    //   }
+    //   HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
+    // }
+
+    HAL_Delay(10);
+    Fsm_Run();
 
     /* USER CODE END WHILE */
 

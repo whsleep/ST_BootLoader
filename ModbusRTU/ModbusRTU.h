@@ -20,6 +20,8 @@ typedef struct
 {
     uint8_t slave_id;       // 本机从机地址 (1~247)
     uint16_t *holding_regs; // 保持寄存器数组指针（外部提供）
+    uint16_t *read_count;   // 指向“读取次数”数组的指针（可选，若为NULL则不统计）
+    uint16_t *write_count;  // 指向“写入次数”数组的指针（可选，若为NULL则不统计）
     uint16_t reg_count;     // 保持寄存器总数量（用于边界检查）
 } MODBUS_Device;
 
@@ -30,10 +32,16 @@ typedef struct
  * @param dev       设备结构体指针
  * @param slave_id  本机从机地址
  * @param holding_regs 外部寄存器数组指针
+ * @param read_count 读取次数数组指针
+ * @param write_count 写入次数数组指针
  * @param reg_count  寄存器数组长度（单位：16位寄存器）
  */
-void MODBUS_Init(MODBUS_Device *dev, uint8_t slave_id, uint16_t *holding_regs, uint16_t reg_count);
-
+void MODBUS_Init(MODBUS_Device *dev,
+                 uint8_t slave_id,
+                 uint16_t *holding_regs,
+                 uint16_t *read_count,
+                 uint16_t *write_count,
+                 uint16_t reg_count);
 /**
  * @brief 处理一帧完整的 Modbus RTU 数据（核心函数）
  * @param dev          设备结构体指针
