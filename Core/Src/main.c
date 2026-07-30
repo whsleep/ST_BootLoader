@@ -102,35 +102,34 @@ int main(void)
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE); // 开启串口空闲中断
+  HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE); // �?启串口空闲中�?
   MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs, Modbus_write_regs, MODBUS_REG_COUNT);
   Fsm_Init();
+  HAL_TIM_Base_Start_IT(&htim4);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    // if (rx_len > 0)
-    // {
-    //   uint16_t len = rx_len; // 局部备份
-    //   rx_len = 0;            // 立即释放标志位，允许中断记录新帧
-    //   MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, modbus_rx_buffer, &len, modbus_tx_buffer, &tx_len);
-    //   if (sta == MB_OK)
-    //   {
-    //     HAL_UART_Transmit(&huart1, modbus_tx_buffer, tx_len, 0xffff);
-    //   }
-    //   HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
-    // }
-
-    HAL_Delay(10);
-    Fsm_Run();
-
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-    /* USER CODE END 3 */
+    if (rx_len > 0)
+    {
+      uint16_t len = rx_len; // �?部备�?
+      rx_len = 0;            // 立即释放标志位，允许中断记录新帧
+      MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, modbus_rx_buffer, &len, modbus_tx_buffer, &tx_len);
+      if (sta == MB_OK)
+      {
+        HAL_UART_Transmit(&huart1, modbus_tx_buffer, tx_len, 0xffff);
+      }
+      HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
+    }
+    Fsm_Process();
   }
+
+  /* USER CODE END WHILE */
+
+  /* USER CODE BEGIN 3 */
+  /* USER CODE END 3 */
 }
 
 /**
@@ -179,7 +178,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-// 空闲中断回调函数，参数Size为串口实际接收到数据字节数
+// 空闲中断回调函数，参数Size为串口实际接收到数据字节�?
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
   if (huart->Instance == USART1)
@@ -188,6 +187,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   }
 }
 
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+  // �ж��ж������ĸ���ʱ��������[reference:5][reference:6]
+  if (htim->Instance == TIM4) // ������ʹ�õ��� TIM2
+  {
+    Fsm_Run();
+  }
+}
 /* USER CODE END 4 */
 
 /**
