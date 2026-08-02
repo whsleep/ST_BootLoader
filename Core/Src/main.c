@@ -114,8 +114,8 @@ int main(void)
   {
     if (rx_len > 0)
     {
-      uint16_t len = rx_len; // �?部备�?
-      rx_len = 0;            // 立即释放标志位，允许中断记录新帧
+      uint16_t len = rx_len;
+      rx_len = 0; // 立即释放标志位，允许中断记录新帧
       MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, modbus_rx_buffer, &len, modbus_tx_buffer, &tx_len);
       if (sta == MB_OK)
       {
@@ -189,8 +189,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
-  // �ж��ж������ĸ���ʱ��������[reference:5][reference:6]
-  if (htim->Instance == TIM4) // ������ʹ�õ��� TIM2
+  if (htim->Instance == TIM4)
   {
     Fsm_Run();
   }
