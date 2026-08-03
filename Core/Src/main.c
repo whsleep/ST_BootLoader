@@ -26,6 +26,8 @@
 /* USER CODE BEGIN Includes */
 #include "ModbusRTU.h"
 #include "fsm_bootloader.h"
+#include "fsm_event.h"
+#include "XMODEM.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -55,8 +57,20 @@ uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE];
 uint8_t modbus_tx_buffer[MODBUS_TX_BUFFER_SIZE];
 volatile uint16_t rx_len = 0;
 uint16_t tx_len = 0;
-MODBUS_Device Modbus_dev0;
 
+MODBUS_Device Modbus_dev0;
+XMODEM_Device xmodem;
+
+Fsm_Struct state_descriptor[] = {
+    [STATE_MODBUS_RECV] = {
+        .state = STATE_MODBUS_RECV,
+        .entry = ModbusRecv_Entry,
+        .do_action = ModbusRecv_Do,
+        .exit = ModbusRecv_Exit},
+    [STATE_PROG_UPGRADE] = {.state = STATE_PROG_UPGRADE, .entry = ProgUpgrade_Entry, .do_action = ProgUpgrade_Do, .exit = ProgUpgrade_Exit},
+    [STATE_JUMP_APP] = {.state = STATE_JUMP_APP, .entry = JumpApp_Entry, .do_action = JumpApp_Do, .exit = JumpApp_Exit}};
+
+uint32_t flash_addr = 0x08008000; // 应用程序起始地址
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -102,9 +116,11 @@ int main(void)
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE); // �?启串口空闲中�?
+  HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
   MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs, Modbus_write_regs, MODBUS_REG_COUNT);
   Fsm_Init();
+  // 初始化 XMODEM
+  XMODEM_Init(&xmodem, &huart1, NULL, &flash_addr, 500, 5);
   HAL_TIM_Base_Start_IT(&htim4);
   /* USER CODE END 2 */
 

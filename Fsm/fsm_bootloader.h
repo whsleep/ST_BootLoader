@@ -3,6 +3,10 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "usart.h"
+
+extern uint32_t s_tick;
+
 
 typedef enum
 {
@@ -39,4 +43,7 @@ void Fsm_Run(void);
 void Fsm_Process(void);
 bool Fsm_IsInState(BootState s);
 
+void StartTimeout(void);
+void StopTimeout(void);
+bool IsTimeout(void);
 #endif
