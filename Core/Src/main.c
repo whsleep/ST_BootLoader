@@ -28,6 +28,7 @@
 #include "fsm_bootloader.h"
 #include "fsm_event.h"
 #include "XMODEM.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -42,9 +43,7 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-#define MODBUS_REG_COUNT 8
-#define MODBUS_RX_BUFFER_SIZE 256
-#define MODBUS_TX_BUFFER_SIZE 256
+
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -57,6 +56,7 @@ uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE];
 uint8_t modbus_tx_buffer[MODBUS_TX_BUFFER_SIZE];
 volatile uint16_t rx_len = 0;
 uint16_t tx_len = 0;
+uint8_t rxdata;
 
 MODBUS_Device Modbus_dev0;
 XMODEM_Device xmodem;
@@ -70,7 +70,6 @@ Fsm_Struct state_descriptor[] = {
     [STATE_PROG_UPGRADE] = {.state = STATE_PROG_UPGRADE, .entry = ProgUpgrade_Entry, .do_action = ProgUpgrade_Do, .exit = ProgUpgrade_Exit},
     [STATE_JUMP_APP] = {.state = STATE_JUMP_APP, .entry = JumpApp_Entry, .do_action = JumpApp_Do, .exit = JumpApp_Exit}};
 
-uint32_t flash_addr = 0x08008000; // 应用程序起始地址
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -120,7 +119,7 @@ int main(void)
   MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs, Modbus_write_regs, MODBUS_REG_COUNT);
   Fsm_Init();
   // 初始化 XMODEM
-  XMODEM_Init(&xmodem, &huart1, NULL, &flash_addr, 500, 5);
+  XMODEM_Init(&xmodem, &huart1, NULL, 500, 5);
   HAL_TIM_Base_Start_IT(&htim4);
   /* USER CODE END 2 */
 
@@ -128,17 +127,6 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    if (rx_len > 0)
-    {
-      uint16_t len = rx_len;
-      rx_len = 0; // 立即释放标志位，允许中断记录新帧
-      MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, modbus_rx_buffer, &len, modbus_tx_buffer, &tx_len);
-      if (sta == MB_OK)
-      {
-        HAL_UART_Transmit(&huart1, modbus_tx_buffer, tx_len, 0xffff);
-      }
-      HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
-    }
     Fsm_Process();
   }
 
@@ -200,6 +188,14 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
   if (huart->Instance == USART1)
   {
     rx_len = Size;
+  }
+}
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
+{
+  if (huart->Instance == USART1)
+  {
+    XMODEM_UART_IRQ_Handler(rxdata); // 将接收到的字节放入 FIFO
+    HAL_UART_Receive_IT(&huart1, &rxdata, 1);
   }
 }
 

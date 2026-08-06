@@ -46,7 +46,9 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
-
+#define MODBUS_REG_COUNT 8
+#define MODBUS_RX_BUFFER_SIZE 256
+#define MODBUS_TX_BUFFER_SIZE 256
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/

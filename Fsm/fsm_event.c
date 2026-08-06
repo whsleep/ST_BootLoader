@@ -3,6 +3,13 @@
 extern volatile uint16_t Modbus_read_regs[];
 extern volatile uint16_t Modbus_write_regs[];
 extern uint16_t Modbus_holding_regs[];
+extern uint16_t tx_len;
+extern volatile uint16_t rx_len;
+extern uint8_t modbus_rx_buffer[];
+extern uint8_t modbus_tx_buffer[];
+extern MODBUS_Device Modbus_dev0;
+extern uint8_t rxdata;
+extern XMODEM_Device xmodem;
 
 /* 从 Modbus 寄存器提取命令数据 */
 #define MODBUS_06_REC Modbus_write_regs[0]
@@ -47,7 +54,17 @@ BootEvent ModbusRecv_Do(void)
         StopTimeout(); // 收到命令，停止超时
         return EVENT_RECV_LEGAL_06H;
     }
-
+    if (rx_len > 0)
+    {
+        uint16_t len = rx_len;
+        rx_len = 0; // 立即释放标志位，允许中断记录新帧
+        MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, modbus_rx_buffer, &len, modbus_tx_buffer, &tx_len);
+        if (sta == MB_OK)
+        {
+            HAL_UART_Transmit(&huart1, modbus_tx_buffer, tx_len, 0xffff);
+        }
+        HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
+    }
     // 超时检测
     if (IsTimeout())
     {
@@ -66,7 +83,8 @@ BootEvent ModbusRecv_Do(void)
 
 void ModbusRecv_Exit(void)
 {
-    // 退出等待状态时的清理（本例无特殊需求）
+    HAL_UART_AbortReceive(&huart1);           // 终止当前接收（包括禁用IDLE中断）
+    HAL_UART_Receive_IT(&huart1, &rxdata, 1); // 开启单字节接收
 }
 
 /* ---------------- 状态 STATE_PROG_UPGRADE ---------------- */
@@ -76,6 +94,7 @@ void ModbusRecv_Exit(void)
  */
 void ProgUpgrade_Entry(void)
 {
+    XMODEM_StartReceive(&xmodem);
 #if DEBUG
     printf("[FSM] Enter STATE_PROG_UPGRADE, tick=%lu\n", (unsigned long)s_tick);
 #endif
@@ -89,6 +108,8 @@ void ProgUpgrade_Entry(void)
  */
 BootEvent ProgUpgrade_Do(void)
 {
+
+    XMODEM_Poll(&xmodem);
     // 本示例仅模拟超时作为烧写完成条件
     if (IsTimeout())
     {

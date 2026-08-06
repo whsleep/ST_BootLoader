@@ -4,15 +4,19 @@
             "name": "Win32",
             "includePath": [
                 "${workspaceFolder}/**",
-                "D:\\Keil_v5\\ARM\\ARMCC\\include\\**"
+                "C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc",
+                "C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Device/ST/STM32F4xx/Include",
+                "C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Include",
+                "${workspaceFolder}/**",
+                "${workspaceFolder}/Core/Inc"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "USE_STDPERIPH_DRIVER"
+                "USE_STDPERIPH_DRIVER",
+                "USE_HAL_DRIVER"
             ],
-            "compilerPath": "D:\\Qt5\\Tools\\mingw810_64\\bin\\gcc.exe",
             "cStandard": "c17",
             "cppStandard": "gnu++14",
             "intelliSenseMode": "windows-gcc-x64"

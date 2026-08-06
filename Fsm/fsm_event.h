@@ -5,24 +5,21 @@
 #include "usart.h"
 #include <stdio.h>
 
-#define DEBUG 1 // 调试输出开关
+#include "ModbusRTU.h"
+#include "XMODEM.h"
 
+#define DEBUG 0
 
 void ModbusRecv_Entry(void);
 BootEvent ModbusRecv_Do(void);
 void ModbusRecv_Exit(void);
 
-
 void ProgUpgrade_Entry(void);
 BootEvent ProgUpgrade_Do(void);
 void ProgUpgrade_Exit(void);
-
 
 void JumpApp_Entry(void);
 BootEvent JumpApp_Do(void);
 void JumpApp_Exit(void);
 
-
-
 #endif
-
