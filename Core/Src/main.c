@@ -28,6 +28,7 @@
 #include "fsm_bootloader.h"
 #include "fsm_event.h"
 #include "XMODEM.h"
+#include "BootLoader.h"
 
 /* USER CODE END Includes */
 
@@ -70,6 +71,7 @@ Fsm_Struct state_descriptor[] = {
     [STATE_PROG_UPGRADE] = {.state = STATE_PROG_UPGRADE, .entry = ProgUpgrade_Entry, .do_action = ProgUpgrade_Do, .exit = ProgUpgrade_Exit},
     [STATE_JUMP_APP] = {.state = STATE_JUMP_APP, .entry = JumpApp_Entry, .do_action = JumpApp_Do, .exit = JumpApp_Exit}};
 
+uint8_t ass[8] = {1,1,1,1,1,1,1,1};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -119,7 +121,8 @@ int main(void)
   MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs, Modbus_write_regs, MODBUS_REG_COUNT);
   Fsm_Init();
   // 初始化 XMODEM
-  XMODEM_Init(&xmodem, &huart1, NULL, 500, 5);
+  XMODEM_Init(&xmodem, &huart1, Bootloader_FlashWriteBuffer, 500, 5);
+  Bootloader_Init();
   HAL_TIM_Base_Start_IT(&htim4);
   /* USER CODE END 2 */
 
@@ -127,7 +130,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-    Fsm_Process();
+		Fsm_Process();
   }
 
   /* USER CODE END WHILE */

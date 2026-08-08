@@ -7,6 +7,7 @@
 
 #include "ModbusRTU.h"
 #include "XMODEM.h"
+#include "BootLoader.h"
 
 #define DEBUG 0
 

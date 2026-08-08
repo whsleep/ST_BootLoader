@@ -2,6 +2,19 @@
 #define __BOOTLOADER_H
 
 #include "stm32f4xx_hal.h"
+#include "stdbool.h"
+
+/* 错误码（沿用你的设计） */
+enum eBootloaderErrorCodes
+{
+    BL_OK = 0,
+    BL_NO_APP,
+    BL_SIZE_ERROR,
+    BL_CHKS_ERROR,
+    BL_ERASE_ERROR,
+    BL_WRITE_ERROR,
+    BL_OBP_ERROR
+};
 
 /* ======================= BootLoader 配置 ======================= */
 #define BOOT_SIZE 0x8000U /* 32 KB */
@@ -12,9 +25,17 @@
 #error "BOOT_SIZE + APP_SIZE must equal total Flash size (256 KB)"
 #endif
 
-#define BOOT_ADDRESS FLASH_BASE            /* Bootloader 起始地址 */
-#define APP_ADDRESS FLASH_BASE + BOOT_SIZE /* 应用程序起始地址 */
-#define END_ADDRESS FLASH_END              /* 应用程序结束地址（最后一个字节）*/
+#define BOOT_ADDRESS (FLASH_BASE)            /* Bootloader 起始地址 */
+#define APP_ADDRESS (FLASH_BASE + BOOT_SIZE) /* 应用程序起始地址 */
+#define END_ADDRESS (FLASH_END)              /* 应用程序结束地址 */
+
+// APP魔数地址
+#define LAST_IRQn SPI4_IRQn                                // 最后一个中断向量
+#define VECT_TABLE_SIZE ((1 + 16 + ((LAST_IRQn) + 1)) * 4) // 408
+#define MAGIC_ADDR (FLASH_BASE + BOOT_SIZE + VECT_TABLE_SIZE)
+#define APP_VALID_MAGIC 0x5A5AU
+
+typedef void (*pFunction)(void);
 
 /* ======================= Flash 布局定义 ======================= */
 /**
@@ -52,5 +73,18 @@
 #define SECTOR_5_BASE 0x08020000UL
 #define SECTOR_5_END 0x0803FFFFUL
 #define SECTOR_5_SIZE (SECTOR_5_END - SECTOR_5_BASE + 1) /* 128 KB */
+
+/* 应用程序扇区数量（2,3,4,5 共 4 个） */
+#define APP_SECTOR_START FLASH_SECTOR_2
+#define APP_SECTOR_COUNT 4
+
+uint8_t Bootloader_Init(void);
+uint8_t Bootloader_Erase(void);
+uint8_t Bootloader_FlashBegin(void);
+uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len); /* 供回调调用 */
+uint8_t Bootloader_FlashEnd(void);
+
+bool CheckAppValid(void);
+void BootJumpAPP(void);
 
 #endif /* __BOOTLOADER_H */

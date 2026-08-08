@@ -176,7 +176,7 @@ void XMODEM_Poll(XMODEM_Device *dev)
 
     // 3. 扫描工作区，寻找完整的数据包
     uint16_t offset = 0;
-    while (offset < work_len) // 0-work_len-1 查找
+    while (offset < work_len) // 0--work_len-1 查找
     {
         uint8_t type = work_buf[offset]; // 当前字节作为帧头
         uint16_t data_len = 0;           // 数据长度（128 或 1024）
@@ -220,6 +220,7 @@ void XMODEM_Poll(XMODEM_Device *dev)
             // 如果跳过太多无效数据，剪切工作区
             if (offset > 512)
             {
+                // 剩余字节移到头部
                 memmove(work_buf, &work_buf[offset], work_len - offset);
                 work_len -= offset;
                 offset = 0;

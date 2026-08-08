@@ -16,16 +16,6 @@ extern XMODEM_Device xmodem;
 #define MODBUS_03_REC Modbus_read_regs[0]
 #define MODBUS_REC Modbus_holding_regs[0]
 
-/**
- * @brief 检查当前 Flash 中的 APP 是否有效
- * @return true 有效，false 无效
- * @note 用户需根据实际硬件实现（CRC、签名等）
- */
-bool CheckAppValid(void)
-{
-    return true;
-}
-
 /* ---------------- 状态 STATE_MODBUS_RECV ---------------- */
 
 /**
@@ -94,6 +84,13 @@ void ModbusRecv_Exit(void)
  */
 void ProgUpgrade_Entry(void)
 {
+    // 擦除 APP 区（扇区 2~5）
+    if (Bootloader_Erase() != BL_OK)
+    {
+        // 擦除失败，上报错误，可能死循环或等待复位
+        Error_Handler();
+    }
+    Bootloader_FlashBegin(); // 开始 Flash 写入
     XMODEM_StartReceive(&xmodem);
 #if DEBUG
     printf("[FSM] Enter STATE_PROG_UPGRADE, tick=%lu\n", (unsigned long)s_tick);
@@ -110,21 +107,15 @@ BootEvent ProgUpgrade_Do(void)
 {
 
     XMODEM_Poll(&xmodem);
-    // 本示例仅模拟超时作为烧写完成条件
-    if (IsTimeout())
+    // 判断是否结束接收
+    if (xmodem.eot_received == true)
     {
-#if DEBUG
-        printf("[FSM] Timeout in STATE_PROG_UPGRADE (simulate burn complete)\n");
-#endif
-        StopTimeout();
-        // 假设烧写完成，根据新 APP 有效性决定事件
-        // 实际应使用 CheckNewAppValid()，此处暂用 CheckAppValid() 模拟
-        if (CheckAppValid())
+        Bootloader_FlashEnd(); // 结束 Flash 写入，处理剩余缓存
+        if (CheckAppValid())   // 检查 APP 魔数是否有效
             return EVENT_BURN_COMPLETE_APP_VALID;
         else
             return EVENT_BURN_COMPLETE_APP_INVALID;
     }
-
     return EVENT_NONE;
 }
 
@@ -151,7 +142,7 @@ void JumpApp_Entry(void)
  */
 BootEvent JumpApp_Do(void)
 {
-    // 本示例仅模拟超时作为烧写完成条件
+    BootJumpAPP();
     if (IsTimeout())
     {
 #if DEBUG

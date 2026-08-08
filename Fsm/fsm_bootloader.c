@@ -4,7 +4,7 @@
 extern Fsm_Struct state_descriptor[];
 
 #define TICK_PERIOD_MS 10                             // Fsm_Run 调用间隔（ms）
-#define TIMEOUT_MS 10000                               // 超时总时长（ms）
+#define TIMEOUT_MS 5000                               // 超时总时长（ms）
 #define TIMEOUT_PERIODS (TIMEOUT_MS / TICK_PERIOD_MS) // 超时周期数
 
 uint32_t s_tick = 0;                  // 系统 tick 计数器（每次 Fsm_Run 递增）
