@@ -338,9 +338,9 @@
             <v6Rtti>0</v6Rtti>
             <VariousControls>
               <MiscControls></MiscControls>
-              <Define>USE_HAL_DRIVER,STM32F401xC</Define>
+              <Define>USE_HAL_DRIVER,STM32F401xC,ULOG_ENABLED</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Device/ST/STM32F4xx/Include;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Include;../Fsm;../ModbusRTU;..\Xmodem;..\BootLoader</IncludePath>
+              <IncludePath>../Core/Inc;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Device/ST/STM32F4xx/Include;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Include;../Fsm;../ModbusRTU;..\Xmodem;..\BootLoader;..\ULOG</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -563,6 +563,16 @@
               <FileName>BootLoader.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\BootLoader\BootLoader.c</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
+          <GroupName>Application/ULOG</GroupName>
+          <Files>
+            <File>
+              <FileName>ulog.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\ULOG\ulog.c</FilePath>
             </File>
           </Files>
         </Group>

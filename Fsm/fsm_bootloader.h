@@ -7,7 +7,6 @@
 
 extern uint32_t s_tick;
 
-
 typedef enum
 {
     STATE_MODBUS_RECV = 0,
@@ -41,7 +40,7 @@ typedef struct
 void Fsm_Init(void);
 void Fsm_Run(void);
 void Fsm_Process(void);
-bool Fsm_IsInState(BootState s);
+BootState Fsm_IsInState(void);
 
 void StartTimeout(void);
 void StopTimeout(void);

@@ -64,7 +64,7 @@ static const Transition g_trans_table[] = {
 };
 #define TRANS_COUNT (sizeof(g_trans_table) / sizeof(g_trans_table[0]))
 
-static const Fsm_Struct *p_current = NULL; // 当前状态指针
+const Fsm_Struct *p_current = NULL; // 当前状态指针
 
 /**
  * @brief 根据当前状态和事件查找下一个状态
@@ -146,15 +146,13 @@ void Fsm_Process(void)
         // 超时且 APP 无效：重新进入当前状态以重置超时定时器
         ChangeState(p_current->state);
     }
-    // 其他情况（事件未导致转移且不是特定重入事件）忽略
 }
 
 /**
- * @brief 查询当前状态是否等于指定状态
- * @param state 要查询的状态
- * @return true 相等，false 不等或未初始化
+ * @brief 查询当前状态
+ * @return 当前状态
  */
-bool Fsm_IsInState(BootState state)
+BootState Fsm_IsInState(void)
 {
-    return (p_current != NULL && p_current->state == state);
+    return (p_current != NULL ? p_current->state : 0);
 }

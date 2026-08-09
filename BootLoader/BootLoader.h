@@ -3,8 +3,9 @@
 
 #include "stm32f4xx_hal.h"
 #include "stdbool.h"
+#include "ulog.h"
 
-/* 错误码（沿用你的设计） */
+/* 错误码 */
 enum eBootloaderErrorCodes
 {
     BL_OK = 0,

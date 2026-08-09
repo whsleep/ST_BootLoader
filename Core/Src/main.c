@@ -29,6 +29,7 @@
 #include "fsm_event.h"
 #include "XMODEM.h"
 #include "BootLoader.h"
+#include "ulog.h"
 
 /* USER CODE END Includes */
 
@@ -71,11 +72,38 @@ Fsm_Struct state_descriptor[] = {
     [STATE_PROG_UPGRADE] = {.state = STATE_PROG_UPGRADE, .entry = ProgUpgrade_Entry, .do_action = ProgUpgrade_Do, .exit = ProgUpgrade_Exit},
     [STATE_JUMP_APP] = {.state = STATE_JUMP_APP, .entry = JumpApp_Entry, .do_action = JumpApp_Do, .exit = JumpApp_Exit}};
 
-uint8_t ass[8] = {1,1,1,1,1,1,1,1};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+void LED_MODE(uint8_t state)
+{
+  static uint32_t lastticks = 0;
+  static uint32_t gapticks = 0;
+  if (HAL_GetTick() - lastticks > gapticks)
+  {
+    lastticks = HAL_GetTick();
+    HAL_GPIO_TogglePin(LD0_GPIO_Port, LD0_Pin);
+  }
+
+  switch (state)
+  {
+  case 0:
+    gapticks = 50; // Set gap time for state 0
+    break;
+  case 1:
+    gapticks = 100; // Set gap time for state 1
+    break;
+  default:
+    gapticks = 500; // Set gap time for default state
+    break;
+  }
+}
+
+void my_console_logger(ulog_level_t lvl, const char *msg)
+{
+  printf("[%lu][%s]: %s\n", HAL_GetTick(), ulog_level_name(lvl), msg);
+}
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -123,6 +151,8 @@ int main(void)
   // 初始化 XMODEM
   XMODEM_Init(&xmodem, &huart1, Bootloader_FlashWriteBuffer, 500, 5);
   Bootloader_Init();
+  ULOG_INIT();
+  ULOG_SUBSCRIBE(my_console_logger, ULOG_DEBUG_LEVEL);
   HAL_TIM_Base_Start_IT(&htim4);
   /* USER CODE END 2 */
 
@@ -130,7 +160,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-		Fsm_Process();
+    Fsm_Process();
   }
 
   /* USER CODE END WHILE */
@@ -185,7 +215,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-// 空闲中断回调函数，参数Size为串口实际接收到数据字节�?
+// 空闲中断回调函数，参数Size为串口实际接收到数据字节数
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
   if (huart->Instance == USART1)
@@ -207,6 +237,7 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   if (htim->Instance == TIM4)
   {
     Fsm_Run();
+    LED_MODE(Fsm_IsInState());
   }
 }
 /* USER CODE END 4 */

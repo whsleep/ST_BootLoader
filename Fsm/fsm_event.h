@@ -8,8 +8,8 @@
 #include "ModbusRTU.h"
 #include "XMODEM.h"
 #include "BootLoader.h"
+#include "ulog.h"
 
-#define DEBUG 0
 
 void ModbusRecv_Entry(void);
 BootEvent ModbusRecv_Do(void);

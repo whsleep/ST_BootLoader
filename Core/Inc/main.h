@@ -23,7 +23,8 @@
 #define __MAIN_H
 
 #ifdef __cplusplus
-extern "C" {
+extern "C"
+{
 #endif
 
 /* Includes ------------------------------------------------------------------*/
@@ -49,10 +50,10 @@ extern "C" {
 #define MODBUS_REG_COUNT 8
 #define MODBUS_RX_BUFFER_SIZE 256
 #define MODBUS_TX_BUFFER_SIZE 256
-/* USER CODE END EM */
+    /* USER CODE END EM */
 
-/* Exported functions prototypes ---------------------------------------------*/
-void Error_Handler(void);
+    /* Exported functions prototypes ---------------------------------------------*/
+    void Error_Handler(void);
 
 /* USER CODE BEGIN EFP */
 
@@ -62,9 +63,9 @@ void Error_Handler(void);
 #define LD0_Pin GPIO_PIN_13
 #define LD0_GPIO_Port GPIOC
 
-/* USER CODE BEGIN Private defines */
+    /* USER CODE BEGIN Private defines */
 
-/* USER CODE END Private defines */
+    /* USER CODE END Private defines */
 
 #ifdef __cplusplus
 }

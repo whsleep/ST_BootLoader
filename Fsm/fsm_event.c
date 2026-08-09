@@ -23,9 +23,7 @@ extern XMODEM_Device xmodem;
  */
 void ModbusRecv_Entry(void)
 {
-#if DEBUG
-    printf("[FSM] Enter STATE_MODBUS_RECV, tick=%lu\n", (unsigned long)s_tick);
-#endif
+    ULOG_INFO("Entering STATE_MODBUS_RECV");
     StartTimeout();
 }
 
@@ -38,9 +36,7 @@ BootEvent ModbusRecv_Do(void)
     // 检测是否收到合法的升级触发命令
     if (MODBUS_REC == 0x5B5B && MODBUS_06_REC > 0 && MODBUS_03_REC > 0)
     {
-#if DEBUG
-        printf("[FSM] Received legal 0x06 command, trigger upgrade\n");
-#endif
+        ULOG_INFO("Received legal 0x06 command, triggering upgrade");
         StopTimeout(); // 收到命令，停止超时
         return EVENT_RECV_LEGAL_06H;
     }
@@ -58,9 +54,7 @@ BootEvent ModbusRecv_Do(void)
     // 超时检测
     if (IsTimeout())
     {
-#if DEBUG
-        printf("[FSM] Timeout in STATE_MODBUS_RECV\n");
-#endif
+        ULOG_INFO("Timeout in STATE_MODBUS_RECV");
         StopTimeout();
         if (CheckAppValid())
             return EVENT_TIMEOUT_APP_VALID;
@@ -73,6 +67,7 @@ BootEvent ModbusRecv_Do(void)
 
 void ModbusRecv_Exit(void)
 {
+    ULOG_INFO("Exiting STATE_MODBUS_RECV");
     HAL_UART_AbortReceive(&huart1);           // 终止当前接收（包括禁用IDLE中断）
     HAL_UART_Receive_IT(&huart1, &rxdata, 1); // 开启单字节接收
 }
@@ -84,6 +79,7 @@ void ModbusRecv_Exit(void)
  */
 void ProgUpgrade_Entry(void)
 {
+    ULOG_INFO("Entering STATE_PROG_UPGRADE");
     // 擦除 APP 区（扇区 2~5）
     if (Bootloader_Erase() != BL_OK)
     {
@@ -92,9 +88,6 @@ void ProgUpgrade_Entry(void)
     }
     Bootloader_FlashBegin(); // 开始 Flash 写入
     XMODEM_StartReceive(&xmodem);
-#if DEBUG
-    printf("[FSM] Enter STATE_PROG_UPGRADE, tick=%lu\n", (unsigned long)s_tick);
-#endif
     StartTimeout();
 }
 
@@ -112,15 +105,22 @@ BootEvent ProgUpgrade_Do(void)
     {
         Bootloader_FlashEnd(); // 结束 Flash 写入，处理剩余缓存
         if (CheckAppValid())   // 检查 APP 魔数是否有效
+        {
+            ULOG_INFO("APP is valid");
             return EVENT_BURN_COMPLETE_APP_VALID;
+        }
         else
+        {
+            ULOG_INFO("APP is invalid");
             return EVENT_BURN_COMPLETE_APP_INVALID;
+        }
     }
     return EVENT_NONE;
 }
 
 void ProgUpgrade_Exit(void)
 {
+    ULOG_INFO("Exiting STATE_PROG_UPGRADE");
     // 退出升级状态时的清理
 }
 
@@ -131,9 +131,7 @@ void ProgUpgrade_Exit(void)
  */
 void JumpApp_Entry(void)
 {
-#if DEBUG
-    printf("[FSM] Enter STATE_JUMP_APP, tick=%lu\n", (unsigned long)s_tick);
-#endif
+    ULOG_INFO("Entering STATE_JUMP_APP");
     // 实际应调用 JumpToApp();  // 该函数不会返回
 }
 
@@ -145,12 +143,9 @@ BootEvent JumpApp_Do(void)
     BootJumpAPP();
     if (IsTimeout())
     {
-#if DEBUG
-        printf("[FSM] Timeout in STATE_JUMP_APP (simulate jump complete)\n");
-#endif
+        ULOG_INFO("Timeout in STATE_JUMP_APP");
         return EVENT_NONE;
     }
-    // 无事件，保持状态（若 JumpToApp 已执行则不会运行到这里）
     return EVENT_NONE;
 }
 

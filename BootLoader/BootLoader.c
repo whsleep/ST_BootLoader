@@ -40,10 +40,10 @@ void BootJumpAPP(void)
 
     // 复位 RCC 时钟配置：切回 HSI，关闭 PLL/HSE，恢复复位默认值
     HAL_RCC_DeInit();
-    // 2. 反初始化所有 HAL 外设
+    // 反初始化所有 HAL 外设
     HAL_DeInit();
 
-    // 3. 关闭所有外设中断并清除挂起位
+    // 关闭所有外设中断并清除挂起位
     for (int i = 0; i < 2; i++)
     {
         NVIC->ICER[i] = 0xFFFFFFFFUL;
@@ -55,22 +55,22 @@ void BootJumpAPP(void)
     SysTick->LOAD = 0;
     SysTick->VAL = 0;
 
-    // 5. 清除系统异常挂起位
+    // 清除系统异常挂起位
     SCB->ICSR |= SCB_ICSR_PENDSVCLR_Msk | SCB_ICSR_PENDSTCLR_Msk;
 
-    // 6. 关全局中断 + 指令同步
+    // 关全局中断 + 指令同步
     __disable_irq();
     __DSB();
     __ISB();
 
-    // 7. 重定向中断向量表
+    // 重定向中断向量表
     SCB->VTOR = APP_ADDRESS;
 
-    // 8. 设置 MSP，绑定跳转入口
+    // 设置 MSP，绑定跳转入口
     __set_MSP(sp);
     Jump_To_Application = (pFunction)pc;
 
-    // 9. 函数指针跳转
+    // 函数指针跳转
     __enable_irq();
     Jump_To_Application();
 
@@ -150,6 +150,7 @@ uint8_t Bootloader_Init(void)
  */
 uint8_t Bootloader_Erase(void)
 {
+    ULOG_DEBUG("Erasing APP Flash sectors 2~5...");
     FLASH_EraseInitTypeDef erase_init = {0};
     uint32_t sector_error = 0;
 
@@ -184,6 +185,7 @@ uint8_t Bootloader_Erase(void)
  */
 uint8_t Bootloader_FlashBegin(void)
 {
+    ULOG_DEBUG("Starting Flash write operation...");
     current_addr = APP_ADDRESS;
     write_cache = 0;
     cache_bytes = 0;
@@ -204,6 +206,7 @@ uint8_t Bootloader_FlashBegin(void)
  */
 uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len)
 {
+    ULOG_DEBUG("Writing data to Flash and the length is %d", len);
     uint16_t i = 0;
 
     if (len == 0)
@@ -212,6 +215,7 @@ uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len)
     /* 检查地址是否越界（预留 8 字节余量） */
     if (current_addr > (FLASH_END - 8))
     {
+        ULOG_ERROR("Flash write address out of range: 0x%08lX", (unsigned long)current_addr);
         HAL_FLASH_Lock();
         return BL_WRITE_ERROR;
     }
@@ -229,6 +233,7 @@ uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len)
         {
             if (Flash_WriteWord(current_addr, write_cache) != BL_OK)
             {
+                ULOG_ERROR("Failed to write word to Flash at address 0x%08lX", (unsigned long)current_addr);
                 __enable_irq();
                 HAL_FLASH_Lock();
                 Error_Handler();
@@ -250,6 +255,8 @@ uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len)
  */
 uint8_t Bootloader_FlashEnd(void)
 {
+    ULOG_DEBUG("Ending Flash write operation...");
+    /* 处理剩余缓存数据（不足 4 字节时，高位填充 0xFF） */
     if (cache_bytes > 0)
     {
         // 剩余不足 4 字节时，高位填充 0xFF
