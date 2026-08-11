@@ -4,6 +4,18 @@
 #include <stdint.h>
 #include <stddef.h>
 
+#define MODBUS_REG_COUNT 8
+#define MODBUS_RX_BUFFER_SIZE 256
+#define MODBUS_TX_BUFFER_SIZE 256
+
+typedef struct
+{
+    uint8_t rx_buffer[MODBUS_RX_BUFFER_SIZE]; // 接收缓冲区
+    uint8_t tx_buffer[MODBUS_TX_BUFFER_SIZE]; // 发送缓冲区
+    volatile uint16_t rx_len;                 // 接收长度（ISR 写入）
+    uint16_t tx_len;                          // 发送长度
+} Modbus_CommContext;
+
 // 定义返回状态枚举
 typedef enum
 {

@@ -3,10 +3,7 @@
 extern volatile uint16_t Modbus_read_regs[];
 extern volatile uint16_t Modbus_write_regs[];
 extern uint16_t Modbus_holding_regs[];
-extern uint16_t tx_len;
-extern volatile uint16_t rx_len;
-extern uint8_t modbus_rx_buffer[];
-extern uint8_t modbus_tx_buffer[];
+extern Modbus_CommContext mb_comm;
 extern MODBUS_Device Modbus_dev0;
 extern uint8_t rxdata;
 extern XMODEM_Device xmodem;
@@ -40,16 +37,16 @@ BootEvent ModbusRecv_Do(void)
         StopTimeout(); // 收到命令，停止超时
         return EVENT_RECV_LEGAL_06H;
     }
-    if (rx_len > 0)
+    if (mb_comm.rx_len > 0)
     {
-        uint16_t len = rx_len;
-        rx_len = 0; // 立即释放标志位，允许中断记录新帧
-        MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, modbus_rx_buffer, &len, modbus_tx_buffer, &tx_len);
+        uint16_t len = mb_comm.rx_len;
+        mb_comm.rx_len = 0; // 立即释放标志位，允许中断记录新帧
+        MODBUS_Status sta = MODBUS_Process_Frame(&Modbus_dev0, mb_comm.rx_buffer, &len, mb_comm.tx_buffer, &mb_comm.tx_len);
         if (sta == MB_OK)
         {
-            HAL_UART_Transmit(&huart1, modbus_tx_buffer, tx_len, 0xffff);
+            HAL_UART_Transmit(&huart1, mb_comm.tx_buffer, mb_comm.tx_len, 0xffff);
         }
-        HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
+        HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer, MODBUS_RX_BUFFER_SIZE);
     }
     // 超时检测
     if (IsTimeout())

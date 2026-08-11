@@ -51,14 +51,12 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
+Modbus_CommContext mb_comm = {0};
+volatile uint8_t rxdata;
+
 uint16_t Modbus_holding_regs[MODBUS_REG_COUNT] = {0};
 volatile uint16_t Modbus_read_regs[MODBUS_REG_COUNT] = {0};
 volatile uint16_t Modbus_write_regs[MODBUS_REG_COUNT] = {0};
-uint8_t modbus_rx_buffer[MODBUS_RX_BUFFER_SIZE];
-uint8_t modbus_tx_buffer[MODBUS_TX_BUFFER_SIZE];
-volatile uint16_t rx_len = 0;
-uint16_t tx_len = 0;
-uint8_t rxdata;
 
 MODBUS_Device Modbus_dev0;
 XMODEM_Device xmodem;
@@ -145,7 +143,7 @@ int main(void)
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UARTEx_ReceiveToIdle_IT(&huart1, modbus_rx_buffer, MODBUS_RX_BUFFER_SIZE);
+  HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer, MODBUS_RX_BUFFER_SIZE);
   MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs, Modbus_write_regs, MODBUS_REG_COUNT);
   Fsm_Init();
   // 初始化 XMODEM
@@ -220,7 +218,7 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
   if (huart->Instance == USART1)
   {
-    rx_len = Size;
+    mb_comm.rx_len = Size;
   }
 }
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
