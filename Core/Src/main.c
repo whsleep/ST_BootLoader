@@ -146,7 +146,7 @@ int main(void)
   HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer, MODBUS_RX_BUFFER_SIZE);
   MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs, Modbus_write_regs, MODBUS_REG_COUNT);
   Fsm_Init();
-  // 初始化 XMODEM
+  // 初始�? XMODEM
   XMODEM_Init(&xmodem, &huart1, Bootloader_FlashWriteBuffer, 500, 5);
   Bootloader_Init();
   ULOG_INIT();
@@ -184,13 +184,12 @@ void SystemClock_Config(void)
   /** Initializes the RCC Oscillators according to the specified parameters
    * in the RCC_OscInitTypeDef structure.
    */
-  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
-  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
-  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSE;
+  RCC_OscInitStruct.HSEState = RCC_HSE_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
-  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 84;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
+  RCC_OscInitStruct.PLL.PLLM = 25;
+  RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -213,7 +212,7 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-// 空闲中断回调函数，参数Size为串口实际接收到数据字节数
+// 空闲中断回调函数，参数Size为串口实际接收到数据字节�?
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
 {
   if (huart->Instance == USART1)
@@ -225,7 +224,7 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
   if (huart->Instance == USART1)
   {
-    XMODEM_UART_IRQ_Handler(rxdata); // 将接收到的字节放入 FIFO
+    XMODEM_UART_IRQ_Handler(rxdata); // 将接收到的字节放�? FIFO
     HAL_UART_Receive_IT(&huart1, &rxdata, 1);
   }
 }
