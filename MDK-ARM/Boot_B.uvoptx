@@ -602,7 +602,7 @@
 
   <Group>
     <GroupName>Application/Fsm</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -613,7 +613,7 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\Fsm\fsm_bootloader.c</PathWithFileName>
+      <PathWithFileName>..\Application\Fsm\fsm_bootloader.c</PathWithFileName>
       <FilenameWithoutPath>fsm_bootloader.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -625,7 +625,7 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\Fsm\fsm_event.c</PathWithFileName>
+      <PathWithFileName>..\Application\Fsm\fsm_event.c</PathWithFileName>
       <FilenameWithoutPath>fsm_event.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -634,7 +634,7 @@
 
   <Group>
     <GroupName>Application/ModbusRTU</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -645,7 +645,7 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\ModbusRTU\ModbusRTU.c</PathWithFileName>
+      <PathWithFileName>..\Application\ModbusRTU\ModbusRTU.c</PathWithFileName>
       <FilenameWithoutPath>ModbusRTU.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -654,7 +654,7 @@
 
   <Group>
     <GroupName>Application/Xmodem</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -665,7 +665,7 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\Xmodem\XMODEM.c</PathWithFileName>
+      <PathWithFileName>..\Application\Xmodem\XMODEM.c</PathWithFileName>
       <FilenameWithoutPath>XMODEM.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -685,7 +685,7 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\BootLoader\BootLoader.c</PathWithFileName>
+      <PathWithFileName>..\Application\BootLoader\BootLoader.c</PathWithFileName>
       <FilenameWithoutPath>BootLoader.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>
@@ -694,7 +694,7 @@
 
   <Group>
     <GroupName>Application/ULOG</GroupName>
-    <tvExp>0</tvExp>
+    <tvExp>1</tvExp>
     <tvExpOptDlg>0</tvExpOptDlg>
     <cbSel>0</cbSel>
     <RteFlg>0</RteFlg>
@@ -705,7 +705,7 @@
       <tvExp>0</tvExp>
       <tvExpOptDlg>0</tvExpOptDlg>
       <bDave2>0</bDave2>
-      <PathWithFileName>..\ULOG\ulog.c</PathWithFileName>
+      <PathWithFileName>..\Application\ULOG\ulog.c</PathWithFileName>
       <FilenameWithoutPath>ulog.c</FilenameWithoutPath>
       <RteFlg>0</RteFlg>
       <bShared>0</bShared>

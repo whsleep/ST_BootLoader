@@ -340,7 +340,7 @@
               <MiscControls></MiscControls>
               <Define>USE_HAL_DRIVER,STM32F401xC,ULOG_ENABLED</Define>
               <Undefine></Undefine>
-              <IncludePath>../Core/Inc;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Device/ST/STM32F4xx/Include;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Include;../Fsm;../ModbusRTU;..\Xmodem;..\BootLoader;..\ULOG</IncludePath>
+              <IncludePath>../Core/Inc;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/STM32F4xx_HAL_Driver/Inc/Legacy;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Device/ST/STM32F4xx/Include;C:/Users/Anin/STM32Cube/Repository/STM32Cube_FW_F4_V1.28.3/Drivers/CMSIS/Include;..\Application\BootLoader;..\Application\Fsm;..\Application\ModbusRTU;..\Application\ULOG;..\Application\Xmodem</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -527,12 +527,12 @@
             <File>
               <FileName>fsm_bootloader.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Fsm\fsm_bootloader.c</FilePath>
+              <FilePath>..\Application\Fsm\fsm_bootloader.c</FilePath>
             </File>
             <File>
               <FileName>fsm_event.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Fsm\fsm_event.c</FilePath>
+              <FilePath>..\Application\Fsm\fsm_event.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -542,7 +542,7 @@
             <File>
               <FileName>ModbusRTU.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\ModbusRTU\ModbusRTU.c</FilePath>
+              <FilePath>..\Application\ModbusRTU\ModbusRTU.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -552,7 +552,7 @@
             <File>
               <FileName>XMODEM.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\Xmodem\XMODEM.c</FilePath>
+              <FilePath>..\Application\Xmodem\XMODEM.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -562,7 +562,7 @@
             <File>
               <FileName>BootLoader.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\BootLoader\BootLoader.c</FilePath>
+              <FilePath>..\Application\BootLoader\BootLoader.c</FilePath>
             </File>
           </Files>
         </Group>
@@ -572,7 +572,7 @@
             <File>
               <FileName>ulog.c</FileName>
               <FileType>1</FileType>
-              <FilePath>..\ULOG\ulog.c</FilePath>
+              <FilePath>..\Application\ULOG\ulog.c</FilePath>
             </File>
           </Files>
         </Group>
