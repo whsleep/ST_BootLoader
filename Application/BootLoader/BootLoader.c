@@ -79,6 +79,14 @@ void BootJumpAPP(void)
         ;
 }
 
+/**
+ * @brief 返回待写入地址
+ */
+uint32_t ReturnCurrentAddr(void)
+{
+	return current_addr;
+}
+
 /*
  *@brief  获取指定地址所在的 Flash 扇区号
  *@param  addr: Flash 地址

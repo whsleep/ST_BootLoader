@@ -17,18 +17,19 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include "gpio.h"
 #include "main.h"
 #include "tim.h"
 #include "usart.h"
-#include "gpio.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "BootLoader.h"
+#include "BootLoader_common.h"
 #include "ModbusRTU.h"
+#include "XMODEM.h"
 #include "fsm_bootloader.h"
 #include "fsm_event.h"
-#include "XMODEM.h"
-#include "BootLoader.h"
 #include "ulog.h"
 
 /* USER CODE END Includes */
@@ -62,30 +63,34 @@ MODBUS_Device Modbus_dev0;
 XMODEM_Device xmodem;
 
 Fsm_Struct state_descriptor[] = {
-    [STATE_MODBUS_RECV] = {
-        .state = STATE_MODBUS_RECV,
-        .entry = ModbusRecv_Entry,
-        .do_action = ModbusRecv_Do,
-        .exit = ModbusRecv_Exit},
-    [STATE_PROG_UPGRADE] = {.state = STATE_PROG_UPGRADE, .entry = ProgUpgrade_Entry, .do_action = ProgUpgrade_Do, .exit = ProgUpgrade_Exit},
-    [STATE_JUMP_APP] = {.state = STATE_JUMP_APP, .entry = JumpApp_Entry, .do_action = JumpApp_Do, .exit = JumpApp_Exit}};
+    [STATE_MODBUS_RECV] = {.state = STATE_MODBUS_RECV,
+                           .entry = ModbusRecv_Entry,
+                           .do_action = ModbusRecv_Do,
+                           .exit = ModbusRecv_Exit},
+    [STATE_PROG_UPGRADE] = {.state = STATE_PROG_UPGRADE,
+                            .entry = ProgUpgrade_Entry,
+                            .do_action = ProgUpgrade_Do,
+                            .exit = ProgUpgrade_Exit},
+    [STATE_JUMP_APP] = {.state = STATE_JUMP_APP,
+                        .entry = JumpApp_Entry,
+                        .do_action = JumpApp_Do,
+                        .exit = JumpApp_Exit}};
+
+version_info_t version;
 
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
-void LED_MODE(uint8_t state)
-{
+void LED_MODE(uint8_t state) {
   static uint32_t lastticks = 0;
   static uint32_t gapticks = 0;
-  if (HAL_GetTick() - lastticks > gapticks)
-  {
+  if (HAL_GetTick() - lastticks > gapticks) {
     lastticks = HAL_GetTick();
     HAL_GPIO_TogglePin(LD0_GPIO_Port, LD0_Pin);
   }
 
-  switch (state)
-  {
+  switch (state) {
   case 0:
     gapticks = 50; // Set gap time for state 0
     break;
@@ -98,8 +103,7 @@ void LED_MODE(uint8_t state)
   }
 }
 
-void my_console_logger(ulog_level_t lvl, const char *msg)
-{
+void my_console_logger(ulog_level_t lvl, const char *msg) {
   printf("[%lu][%s]: %s\n", HAL_GetTick(), ulog_level_name(lvl), msg);
 }
 /* USER CODE BEGIN PFP */
@@ -115,8 +119,7 @@ void my_console_logger(ulog_level_t lvl, const char *msg)
  * @brief  The application entry point.
  * @retval int
  */
-int main(void)
-{
+int main(void) {
 
   /* USER CODE BEGIN 1 */
 
@@ -124,7 +127,8 @@ int main(void)
 
   /* MCU Configuration--------------------------------------------------------*/
 
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick.
+   */
   HAL_Init();
 
   /* USER CODE BEGIN Init */
@@ -143,21 +147,29 @@ int main(void)
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer, MODBUS_RX_BUFFER_SIZE);
-  MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs, Modbus_write_regs, MODBUS_REG_COUNT);
+  HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer,
+                              MODBUS_RX_BUFFER_SIZE);
+  MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs,
+              Modbus_write_regs, MODBUS_REG_COUNT);
   Fsm_Init();
-  // 初始�? XMODEM
+  // 初始XMODEM
   XMODEM_Init(&xmodem, &huart1, Bootloader_FlashWriteBuffer, 500, 5);
   Bootloader_Init();
   ULOG_INIT();
   ULOG_SUBSCRIBE(my_console_logger, ULOG_DEBUG_LEVEL);
   HAL_TIM_Base_Start_IT(&htim4);
+  ULOG_INFO("Boot version %d:%d:%d\r\n", BOOT_VER_MAJOR, BOOT_VER_MINOR,
+            BOOT_VER_PATCH);
+  Version_Read(&version);
+  ULOG_INFO("APP version %d:%d:%d\n", version.app_ver_major,
+            version.app_ver_minor, version.app_ver_patch);
+  ULOG_INFO("App size is %d bytes\n", version.app_end_addr - APP_ADDRESS);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
-  while (1)
-  {
+  while (1) {
     Fsm_Process();
   }
 
@@ -171,8 +183,7 @@ int main(void)
  * @brief System Clock Configuration
  * @retval None
  */
-void SystemClock_Config(void)
-{
+void SystemClock_Config(void) {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
 
@@ -192,47 +203,40 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLN = 168;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
-  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
-  {
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK) {
     Error_Handler();
   }
 
   /** Initializes the CPU, AHB and APB buses clocks
    */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                                RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
-  {
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK) {
     Error_Handler();
   }
 }
 
 /* USER CODE BEGIN 4 */
 // 空闲中断回调函数，参数Size为串口实际接收到数据字节�?
-void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size)
-{
-  if (huart->Instance == USART1)
-  {
+void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
+  if (huart->Instance == USART1) {
     mb_comm.rx_len = Size;
   }
 }
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
-{
-  if (huart->Instance == USART1)
-  {
+void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
+  if (huart->Instance == USART1) {
     XMODEM_UART_IRQ_Handler(rxdata); // 将接收到的字节放�? FIFO
     HAL_UART_Receive_IT(&huart1, &rxdata, 1);
   }
 }
 
-void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
-{
-  if (htim->Instance == TIM4)
-  {
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
+  if (htim->Instance == TIM4) {
     Fsm_Run();
     LED_MODE(Fsm_IsInState());
   }
@@ -243,13 +247,11 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
  * @brief  This function is executed in case of error occurrence.
  * @retval None
  */
-void Error_Handler(void)
-{
+void Error_Handler(void) {
   /* USER CODE BEGIN Error_Handler_Debug */
   /* User can add his own implementation to report the HAL error return state */
   __disable_irq();
-  while (1)
-  {
+  while (1) {
   }
   /* USER CODE END Error_Handler_Debug */
 }
@@ -262,11 +264,11 @@ void Error_Handler(void)
  * @param  line: assert_param error line source number
  * @retval None
  */
-void assert_failed(uint8_t *file, uint32_t line)
-{
+void assert_failed(uint8_t *file, uint32_t line) {
   /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
+  /* User can add his own implementation to report the file name and line
+     number, ex: printf("Wrong parameters value: file %s on line %d\r\n", file,
+     line) */
   /* USER CODE END 6 */
 }
 #endif /* USE_FULL_ASSERT */

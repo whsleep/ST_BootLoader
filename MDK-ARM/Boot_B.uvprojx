@@ -49,7 +49,7 @@
             <InvalidFlash>1</InvalidFlash>
           </TargetStatus>
           <OutputDirectory>Boot_B\</OutputDirectory>
-          <OutputName>Boot_B</OutputName>
+          <OutputName>Boot_B.axf</OutputName>
           <CreateExecutable>1</CreateExecutable>
           <CreateLib>0</CreateLib>
           <CreateHexFile>1</CreateHexFile>
@@ -80,9 +80,9 @@
             <nStopB2X>0</nStopB2X>
           </BeforeMake>
           <AfterMake>
-            <RunUserProg1>0</RunUserProg1>
-            <RunUserProg2>1</RunUserProg2>
-            <UserProg1Name></UserProg1Name>
+            <RunUserProg1>1</RunUserProg1>
+            <RunUserProg2>0</RunUserProg2>
+            <UserProg1Name>D:\Keil_v5\ARM\ARMCC\bin\fromelf.exe --bin --output .\Boot_B\Boot_B.bin .\Boot_B\Boot_B.axf</UserProg1Name>
             <UserProg2Name></UserProg2Name>
             <UserProg1Dos16Mode>0</UserProg1Dos16Mode>
             <UserProg2Dos16Mode>0</UserProg2Dos16Mode>
@@ -563,6 +563,11 @@
               <FileName>BootLoader.c</FileName>
               <FileType>1</FileType>
               <FilePath>..\Application\BootLoader\BootLoader.c</FilePath>
+            </File>
+            <File>
+              <FileName>BootLoader_common.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Application\BootLoader\BootLoader_common.h</FilePath>
             </File>
           </Files>
         </Group>

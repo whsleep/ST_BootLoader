@@ -4,11 +4,12 @@
 #include "fsm_bootloader.h"
 #include "usart.h"
 #include <stdio.h>
-
+#include "BootLoader_common.h"
 #include "ModbusRTU.h"
 #include "XMODEM.h"
 #include "BootLoader.h"
 #include "ulog.h"
+
 
 
 void ModbusRecv_Entry(void);

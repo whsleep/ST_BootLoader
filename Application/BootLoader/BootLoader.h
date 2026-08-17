@@ -87,5 +87,6 @@ uint8_t Bootloader_FlashEnd(void);
 
 bool CheckAppValid(void);
 void BootJumpAPP(void);
+uint32_t ReturnCurrentAddr(void);
 
 #endif /* __BOOTLOADER_H */
