@@ -1,312 +1,320 @@
 #include "XMODEM.h"
-#include <stdbool.h>
 
-/* ---------- ºê¶¨Òå ---------- */
-#define RX_FIFO_SIZE 2048  // »·ÐÎ FIFO ´óÐ¡£¨ÖÁÉÙ 2*1029£©
-#define WORK_BUF_SIZE 2048 // ¹¤×÷»º³åÇø´óÐ¡£¨ÂÔ´óÓÚ 2*×î´ó°ü£©
+/* ---------- ï¿½ê¶¨ï¿½ï¿½ ---------- */
+#define RX_FIFO_SIZE 4096   
+#define DMA_RX_BUF_SIZE 2058 
+#define WORK_BUF_SIZE 2058   
 
-/* ---------- ¾²Ì¬È«¾Ö±äÁ¿ ---------- */
+/* ---------- ï¿½ï¿½Ì¬È«ï¿½Ö±ï¿½ï¿½ï¿½ ---------- */
 static uint8_t rx_fifo[RX_FIFO_SIZE];
 static volatile uint16_t fifo_head = 0;
 static volatile uint16_t fifo_tail = 0;
+
+static uint8_t dma_rx_buf[DMA_RX_BUF_SIZE];     // DMA ï¿½ï¿½ï¿½Õ»ï¿½ï¿½ï¿½ï¿½ï¿½½
 
 static uint8_t work_buf[WORK_BUF_SIZE];
 static uint16_t work_len = 0;
 static uint32_t work_last_tick = 0;
 
-/* ---------- ÄÚ²¿º¯ÊýÉùÃ÷ ---------- */
+/* ---------- ï¿½Ú²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ---------- */
 static uint16_t XMODEM_CRC16(uint8_t *data, uint16_t len);
 static bool XMODEM_Send_Byte(XMODEM_Device *dev, uint8_t ch);
 static bool XMODEM_FIFO_Get(uint8_t *byte);
 static void XMODEM_Send_ACK(XMODEM_Device *dev);
 static void XMODEM_Send_NAK(XMODEM_Device *dev);
 static void XMODEM_Send_CAN(XMODEM_Device *dev);
+static void XMODEM_UART_DMA_Handler(uint8_t *data, uint16_t len);
 
 /*
- *@brief ¼ÆËã CRC16 Ð£ÑéÂë
- *@param data: Ö¸ÏòÊý¾ÝµÄÖ¸Õë
- *@param len: Êý¾Ý³¤¶È
- *@return CRC16 Ð£ÑéÂë
+ *@brief ï¿½ï¿½ï¿½ï¿½ CRC16 Ð£ï¿½ï¿½ï¿½ï¿½
+ *@param data: Ö¸ï¿½ï¿½ï¿½ï¿½ï¿½Ýµï¿½Ö¸ï¿½ï¿½
+ *@param len: ï¿½ï¿½ï¿½Ý³ï¿½ï¿½ï¿½
+ *@return CRC16 Ð£ï¿½ï¿½ï¿½ï¿½
  */
-static uint16_t XMODEM_CRC16(uint8_t *data, uint16_t len)
-{
-    uint16_t crc = 0x0000;
-    while (len--)
-    {
-        crc ^= (*data++) << 8;
-        for (uint8_t i = 0; i < 8; i++)
-        {
-            if (crc & 0x8000)
-                crc = (crc << 1) ^ 0x1021;
-            else
-                crc <<= 1;
-        }
+static uint16_t XMODEM_CRC16(uint8_t *data, uint16_t len) {
+  uint16_t crc = 0x0000;
+  while (len--) {
+    crc ^= (*data++) << 8;
+    for (uint8_t i = 0; i < 8; i++) {
+      if (crc & 0x8000)
+        crc = (crc << 1) ^ 0x1021;
+      else
+        crc <<= 1;
     }
-    return crc;
+  }
+  return crc;
 }
 
 /*
- *@brief ·¢ËÍµ¥×Ö½ÚÊý¾Ý
- *@param dev: XMODEM Éè±¸½á¹¹ÌåÖ¸Õë
- *@param ch: Òª·¢ËÍµÄ×Ö½Ú
- *@return true ±íÊ¾·¢ËÍ³É¹¦£¬false ±íÊ¾·¢ËÍÊ§°Ü
+ *@brief ï¿½ï¿½ï¿½Íµï¿½ï¿½Ö½ï¿½ï¿½ï¿½ï¿½ï¿½
+ *@param dev: XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½Ö¸ï¿½ï¿½
+ *@param ch: Òªï¿½ï¿½ï¿½Íµï¿½ï¿½Ö½ï¿½
+ *@return true ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½Í³É¹ï¿½ï¿½ï¿½false ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½
  */
-static bool XMODEM_Send_Byte(XMODEM_Device *dev, uint8_t ch)
-{
-    return (HAL_UART_Transmit(dev->huart, &ch, 1, dev->timeout_ms) == HAL_OK);
+static bool XMODEM_Send_Byte(XMODEM_Device *dev, uint8_t ch) {
+  return (HAL_UART_Transmit(dev->huart, &ch, 1, dev->timeout_ms) == HAL_OK);
 }
 
 /*
- *@brief ´®¿ÚÖÐ¶Ï´¦Àíº¯Êý
- *@param data: ½ÓÊÕµ½µÄ×Ö½Ú
+ *@brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ FIFOï¿½ï¿½ï¿½ï¿½ DMA ï¿½Øµï¿½ï¿½ï¿½ï¿½Ã£ï¿½
+ *@param data: ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
+ *@param len: ï¿½ï¿½ï¿½Ý³ï¿½ï¿½ï¿½
  */
-void XMODEM_UART_IRQ_Handler(uint8_t data)
-{
-    // »·ÐÎ»º³åÇø¼ÆËãÏÂÒ»×Ö½ÚÎ»ÖÃ
+static void XMODEM_UART_DMA_Handler(uint8_t *data, uint16_t len) {
+  for (uint16_t i = 0; i < len; i++) {
     uint16_t next = (fifo_head + 1) % RX_FIFO_SIZE;
-    // head=tail Ê±±íÊ¾ FIFO ¿Õ£¬head+1=tail Ê±±íÊ¾ FIFO Âú
-    if (next != fifo_tail)
+    if (next != fifo_tail) // FIFO Î´ï¿½ï¿½
     {
-        rx_fifo[fifo_head] = data;
-        fifo_head = next; // ¸üÐÂ head
+      rx_fifo[fifo_head] = data[i];
+      fifo_head = next;
+    } else {
+      break;
     }
+  }
 }
 
 /*
- *@brief ´Ó FIFO ÖÐÈ¡³öÒ»¸ö×Ö½Ú
- *@param byte: Ö¸Ïò´æ·ÅÈ¡³ö×Ö½ÚµÄÖ¸Õë
- *@return true ±íÊ¾È¡³ö³É¹¦£¬false ±íÊ¾È¡³öÊ§°Ü
+ *@brief ï¿½ï¿½ï¿½Ý¾É½Ó¿Ú£ï¿½ï¿½ï¿½ï¿½Ö½ï¿½Ð´ï¿½ï¿½ FIFOï¿½ï¿½ï¿½Ñ²ï¿½ï¿½Æ¼ï¿½Ê¹ï¿½Ã£ï¿½
+ *@param data: ï¿½ï¿½ï¿½ï¿½ï¿½Ö½ï¿½
  */
-static bool XMODEM_FIFO_Get(uint8_t *byte)
-{
-    // Èç¹û FIFO Îª¿Õ£¬·µ»Ø false
-    if (fifo_head == fifo_tail)
-        return false;
-    *byte = rx_fifo[fifo_tail];                 // È¡³ö FIFO ÖÐµÄ×Ö½Ú
-    fifo_tail = (fifo_tail + 1) % RX_FIFO_SIZE; // ¸üÐÂ tail
-    return true;
+void XMODEM_UART_IRQ_Handler(uint8_t data) {
+  XMODEM_UART_DMA_Handler(&data, 1);
 }
 
-/* ---------- ¿ØÖÆ×Ö·û·¢ËÍ ---------- */
+/*
+ *@brief ï¿½ï¿½ FIFO ï¿½ï¿½È¡ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Ö½ï¿½
+ *@param byte: Ö¸ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½Ö½Úµï¿½Ö¸ï¿½ï¿½
+ *@return true ï¿½ï¿½Ê¾È¡ï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½false ï¿½ï¿½Ê¾È¡ï¿½ï¿½Ê§ï¿½ï¿½
+ */
+static bool XMODEM_FIFO_Get(uint8_t *byte) {
+  if (fifo_head == fifo_tail) // FIFO ï¿½ï¿½
+    return false;
+
+  *byte = rx_fifo[fifo_tail];
+  fifo_tail = (fifo_tail + 1) % RX_FIFO_SIZE;
+  return true;
+}
+
+/* ---------- ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ ---------- */
 static void XMODEM_Send_ACK(XMODEM_Device *dev) { XMODEM_Send_Byte(dev, 0x06); }
 static void XMODEM_Send_NAK(XMODEM_Device *dev) { XMODEM_Send_Byte(dev, 0x15); }
-static void XMODEM_Send_CAN(XMODEM_Device *dev)
-{
-    XMODEM_Send_Byte(dev, 0x18);
-    XMODEM_Send_Byte(dev, 0x18);
+static void XMODEM_Send_CAN(XMODEM_Device *dev) {
+  XMODEM_Send_Byte(dev, 0x18);
+  XMODEM_Send_Byte(dev, 0x18);
 }
 
 /*
- *@brief ³õÊ¼»¯ XMODEM Éè±¸½á¹¹Ìå
- *@param dev: Ö¸Ïò XMODEM Éè±¸½á¹¹ÌåµÄÖ¸Õë
- *@param huart: ´®¿Ú¾ä±ú
- *@param write_cb: Êý¾ÝÐ´Èë»Øµ÷º¯Êý
- *@param timeout_ms: ³¬Ê±Ê±¼ä£¨ºÁÃë£©
- *@param max_retry: ×î´óÖØÊÔ´ÎÊý
+ *@brief ï¿½ï¿½Ê¼ï¿½ï¿½ XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½
+ *@param dev: Ö¸ï¿½ï¿½ XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
+ *@param huart: ï¿½ï¿½ï¿½Ú¾ï¿½ï¿½
+ *@param write_cb: ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½
+ *@param timeout_ms: ï¿½ï¿½Ê±Ê±ï¿½ä£¨ï¿½ï¿½ï¿½ë£©
+ *@param max_retry: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½
  */
 void XMODEM_Init(XMODEM_Device *dev, UART_HandleTypeDef *huart,
-                 XMODEM_WriteCallback write_cb,
-                 uint16_t timeout_ms, uint8_t max_retry)
-{
-    dev->huart = huart;
-    dev->write_cb = write_cb;
-    dev->timeout_ms = timeout_ms;
-    dev->max_retry = max_retry;
-    dev->packet_num = 1;
-    dev->total_bytes = 0;
-    dev->eot_received = false;
-    dev->can_received = false;
+                 XMODEM_WriteCallback write_cb, uint16_t timeout_ms,
+                 uint8_t max_retry) {
+  dev->huart = huart;
+  dev->write_cb = write_cb;
+  dev->timeout_ms = timeout_ms;
+  dev->max_retry = max_retry;
+  dev->packet_num = 1;
+  dev->total_bytes = 0;
+  dev->eot_received = false;
+  dev->can_received = false;
+  dev->receiving = false;
+  dev->rx_len = 0;
+  dev->last_byte_tick = 0;
+
+  HAL_UART_AbortReceive(dev->huart);
+
+  // ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ FIFO
+  work_len = 0;
+  work_last_tick = 0;
+  fifo_head = 0;
+  fifo_tail = 0;
+}
+
+/*
+ *@brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ£ï¿½ï¿½ï¿½ï¿½ï¿½ 'C' ï¿½ï¿½ï¿½Ö£ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½
+ *@param dev: Ö¸ï¿½ï¿½ XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
+ */
+void XMODEM_StartReceive(XMODEM_Device *dev) {
+  dev->receiving = true;
+  dev->packet_num = 1;
+  dev->total_bytes = 0;
+  dev->eot_received = false;
+  dev->can_received = false;
+  work_len = 0;
+
+  // ï¿½ï¿½ï¿½ FIFOï¿½ï¿½ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¸ï¿½ï¿½ï¿½
+  fifo_head = 0;
+  fifo_tail = 0;
+
+  // Í£Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú½ï¿½ï¿½ÐµÄ½ï¿½ï¿½Õ£ï¿½È»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ DMA ï¿½ï¿½ï¿½ï¿½
+  if (HAL_UARTEx_ReceiveToIdle_DMA(dev->huart, dma_rx_buf, DMA_RX_BUF_SIZE) !=
+      HAL_OK) {
     dev->receiving = false;
-    dev->rx_len = 0;
-    dev->last_byte_tick = 0;
+    return;
+  }
 
-    // Çå¿Õ¹¤×÷Çø
-    work_len = 0;
-    work_last_tick = 0;
-    // Çå¿Õ FIFO£¨¿ÉÑ¡£©
-    fifo_head = 0;
-    fifo_tail = 0;
+  // ï¿½ï¿½ï¿½ï¿½ 'C' ï¿½ï¿½ï¿½ï¿½ CRC Ä£Ê½
+  XMODEM_Send_Byte(dev, 0x43);
 }
 
 /*
- *@brief Æô¶¯½ÓÊÕ£¨·¢ËÍ 'C' ÎÕÊÖ£¬¿ªÊ¼½ÓÊÕÎÄ¼þ£©
- *@param dev: Ö¸Ïò XMODEM Éè±¸½á¹¹ÌåµÄÖ¸Õë
+ *@brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½
+ *@param dev: Ö¸ï¿½ï¿½ XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
  */
-void XMODEM_StartReceive(XMODEM_Device *dev)
-{
-    dev->receiving = true;     // ±ê¼ÇÎªÕýÔÚ½ÓÊÕ
-    dev->packet_num = 1;       // ÆÚÍûµÄÏÂÒ»¸ö°üÐòºÅ
-    dev->total_bytes = 0;      // ÀÛ¼Æ½ÓÊÕ×Ö½ÚÊýÇåÁã
-    dev->eot_received = false; // Î´½ÓÊÕ EOT
-    dev->can_received = false; // Î´½ÓÊÕ CAN
+void XMODEM_Poll(XMODEM_Device *dev) {
+  if (!dev->receiving)
+    return;
+
+  uint8_t byte;
+
+  // 1. ï¿½ï¿½ FIFO ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö½ï¿½È¡ï¿½ï¿½ï¿½ï¿½×·ï¿½Óµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+	while (XMODEM_FIFO_Get(&byte)) {
+			if (work_len < WORK_BUF_SIZE) {
+					work_buf[work_len++] = byte;
+					work_last_tick = HAL_GetTick();
+			}else{
+				  // »º³åÇøÂú£¬Ç¿ÖÆÇå¿Õ²¢ NAK£¬±ÜÃâËÀËø
+					work_len = 0;
+					XMODEM_Send_NAK(dev);
+					break;
+			}
+	}
+
+  // 2. ï¿½ï¿½Ê±ï¿½ï¿½é£ºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ýµï¿½ï¿½ï¿½Ê±ï¿½ï¿½Î´ï¿½Õµï¿½ï¿½ï¿½ï¿½Ö½Ú£ï¿½ï¿½ï¿½ï¿½ï¿½Õ²ï¿½ï¿½ï¿½ï¿½ï¿½ NAK
+  if ((HAL_GetTick() - work_last_tick) > dev->timeout_ms) {
     work_len = 0;
-    // ·¢ËÍ 'C' ÇëÇó CRC Ä£Ê½
-    XMODEM_Send_Byte(dev, 0x43);
+    XMODEM_Send_NAK(dev);
+		work_last_tick = HAL_GetTick();
+    return;
+  }
+
+  // 3. É¨ï¿½è¹¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý°ï¿½
+  uint16_t offset = 0;
+  while (offset < work_len) {
+    uint8_t type = work_buf[offset];
+    uint16_t data_len = 0;
+    uint16_t pkg_len = 0;
+
+    // 3.1 Ê¶ï¿½ï¿½Ö¡Í·
+    if (type == 0x01) // SOH
+    {
+      data_len = 128;
+      pkg_len = 1 + 2 + 128 + 2; // 133
+    } else if (type == 0x02)     // STX
+    {
+      data_len = 1024;
+      pkg_len = 1 + 2 + 1024 + 2; // 1029
+    } else if (type == 0x04)      // EOT
+    {
+      XMODEM_Send_ACK(dev);
+      dev->eot_received = true;
+      dev->receiving = false;
+      __disable_irq();
+      HAL_UART_AbortReceive(dev->huart); // Í£Ö¹ DMA ï¿½ï¿½ï¿½ï¿½
+      __enable_irq();
+      memmove(work_buf, &work_buf[offset + 1], work_len - offset - 1);
+      work_len -= (offset + 1);
+      return;
+    } else if (type == 0x18) // CAN
+    {
+      dev->can_received = true;
+      dev->receiving = false;
+      __disable_irq();
+      HAL_UART_AbortReceive(dev->huart); // Í£Ö¹ DMA ï¿½ï¿½ï¿½ï¿½
+      __enable_irq();
+      memmove(work_buf, &work_buf[offset + 1], work_len - offset - 1);
+      work_len -= (offset + 1);
+      return;
+    } else {
+      // ï¿½ï¿½ï¿½ï¿½Ð§Ö¡Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½Ö½ï¿½
+      offset++;
+      if (offset > 512) {
+        memmove(work_buf, &work_buf[offset], work_len - offset);
+        work_len -= offset;
+        offset = 0;
+      }
+      continue;
+    }
+
+    // 3.2 ï¿½ï¿½ï¿½Ý²ï¿½ï¿½ã£¬ï¿½Ë³ï¿½ï¿½È´ï¿½
+    if (work_len < offset + pkg_len) {
+      if (offset > 512) {
+        memmove(work_buf, &work_buf[offset], work_len - offset);
+        work_len -= offset;
+        offset = 0;
+      }
+      return;
+    }
+
+    // 3.3 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½ï¿½
+    uint8_t *pkg = &work_buf[offset];
+
+    // Ð£ï¿½ï¿½ï¿½ï¿½ÅºÍ·ï¿½ï¿½ï¿½
+    if ((pkg[1] + pkg[2]) != 0xFF) {
+      offset++;
+      continue;
+    }
+
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ¥ï¿½ï¿½
+    if (pkg[1] != dev->packet_num) {
+      if (pkg[1] == dev->packet_num - 1) {
+        XMODEM_Send_ACK(dev); // ï¿½Ø¸ï¿½ï¿½É°ï¿½ï¿½ï¿½ï¿½ï¿½ ACK
+      } else {
+        XMODEM_Send_NAK(dev); // ï¿½ï¿½Å´ï¿½ï¿½ó£¬·ï¿½ NAK
+      }
+      offset += pkg_len;   // Ìø¹ýÕû¸ö°ü
+      continue;
+    }
+
+    // Ð£ï¿½ï¿½ CRC
+    uint16_t recv_crc = (pkg[pkg_len - 2] << 8) | pkg[pkg_len - 1];
+    uint16_t calc_crc = XMODEM_CRC16(&pkg[3], data_len);
+    if (calc_crc != recv_crc) {
+      XMODEM_Send_NAK(dev);
+      offset += pkg_len;   // Ìø¹ýÕû¸ö°ü
+      continue;
+    }
+
+    // ---------- Ð£ï¿½ï¿½Í¨ï¿½ï¿½ ----------
+    if (dev->write_cb != NULL) {
+      dev->write_cb(&pkg[3], data_len);
+    }
+    dev->total_bytes += data_len;
+    dev->packet_num++;
+
+    XMODEM_Send_ACK(dev);
+
+    // ï¿½Æ³ï¿½ï¿½Ñ´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½Ð§ï¿½Ö½Ú£ï¿½
+    uint16_t consumed = offset + pkg_len;
+    memmove(work_buf, &work_buf[consumed], work_len - consumed);
+    work_len -= consumed;
+    offset = 0; // ï¿½ï¿½ï¿½ï¿½É¨ï¿½ï¿½Î»ï¿½ï¿½
+  }
+
+  // 4. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Û»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½ï¿½Ý£ï¿½Ç¿ï¿½ï¿½ï¿½ï¿½ï¿½
+  if (work_len >= WORK_BUF_SIZE) {
+    work_len = 0;
+    XMODEM_Send_NAK(dev);
+  }
 }
 
 /*
- *
- *@brief ºËÐÄÂÖÑ¯º¯Êý£¨Ö÷Ñ­»·µ÷ÓÃ£©
- *@param dev: Ö¸Ïò XMODEM Éè±¸½á¹¹ÌåµÄÖ¸Õë
+ *@brief ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ HAL_UARTEx_RxEventCallback ï¿½Ðµï¿½ï¿½ÃµÄ´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+ *@param huart: ï¿½ï¿½ï¿½ï¿½ï¿½Øµï¿½ï¿½Ä´ï¿½ï¿½Ú¾ï¿½ï¿½
+ *@param size: ï¿½ï¿½ï¿½Î½ï¿½ï¿½Õµï¿½ï¿½ï¿½ï¿½Ö½ï¿½ï¿½ï¿½
  */
-void XMODEM_Poll(XMODEM_Device *dev)
-{
-    if (!dev->receiving) // Èç¹ûÎ´´¦ÓÚ½ÓÊÕ×´Ì¬£¬ÔòÖ±½Ó·µ»Ø
-        return;
+void XMODEM_UART_RxEventCallback(XMODEM_Device *dev, uint16_t size) {
 
-    uint8_t byte;
+  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ FIFO
+  XMODEM_UART_DMA_Handler(dma_rx_buf, size);
 
-    // 1. ½« FIFO ÖÐËùÓÐ×Ö½ÚÈ¡³ö£¬×·¼Óµ½¹¤×÷»º³åÇø
-    while (XMODEM_FIFO_Get(&byte))
-    {
-        if (work_len < WORK_BUF_SIZE) // ·ÀÖ¹Òç³ö
-        {
-            work_buf[work_len++] = byte;    // ÌáÈ¡FIFO
-            work_last_tick = HAL_GetTick(); // ¸üÐÂ×îºó½ÓÊÕÊ±¼ä
-        }
-    }
-
-    // 2. ³¬Ê±¼ì²é£ºÈç¹û¹¤×÷ÇøÓÐÊý¾Ýµ«³¤Ê±¼äÎ´ÊÕµ½ÐÂ×Ö½Ú£¬ÔòÇå¿Õ²¢·¢ËÍ NAK
-    if (work_len > 0 && (HAL_GetTick() - work_last_tick) > dev->timeout_ms)
-    {
-        work_len = 0;
-        XMODEM_Send_NAK(dev);
-        return;
-    }
-
-    // 3. É¨Ãè¹¤×÷Çø£¬Ñ°ÕÒÍêÕûµÄÊý¾Ý°ü
-    uint16_t offset = 0;
-    while (offset < work_len) // 0--work_len-1 ²éÕÒ
-    {
-        uint8_t type = work_buf[offset]; // µ±Ç°×Ö½Ú×÷ÎªÖ¡Í·
-        uint16_t data_len = 0;           // Êý¾Ý³¤¶È£¨128 »ò 1024£©
-        uint16_t pkg_len = 0;            // °ü×Ü³¤¶È£¨Ö¡Í·+ÐòºÅ+·´Âë+Êý¾Ý+CRC£©
-
-        // 3.1 Ê¶±ðÖ¡Í·
-        if (type == 0x01)
-        { // SOH (128×Ö½ÚÊý¾Ý)
-            data_len = 128;
-            pkg_len = 1 + 2 + 128 + 2; // °üÍ·+ÐòºÅ+·´Âë+Êý¾Ý+CRC = 133
-        }
-        else if (type == 0x02)
-        { // STX (1024×Ö½ÚÊý¾Ý)
-            data_len = 1024;
-            pkg_len = 1 + 2 + 1024 + 2; // 1029
-        }
-        else if (type == 0x04)
-        { // EOT
-            // ·¢ËÍ ACK£¬ÖÃ½áÊø±êÖ¾
-            XMODEM_Send_ACK(dev);
-            dev->eot_received = true; // ±ê¼Ç½ÓÊÕÍê³É
-            dev->receiving = false;   // ±ê¼Ç½ÓÊÕ½áÊø
-            // ÒÆ³ý EOT ¼°Ö®Ç°µÄÊý¾Ý
-            // |0--ÒÑ´¦Àí--offset--ÐèÒª¶ªÆúµÄÊý¾Ý--work_len-1|
-            memmove(work_buf, &work_buf[offset + 1], work_len - offset - 1);
-            work_len -= (offset + 1);
-            return;
-        }
-        else if (type == 0x18)
-        {                             // CAN
-            dev->can_received = true; // ±ê¼Ç½ÓÊÕ±»È¡Ïû
-            dev->receiving = false;   // ±ê¼Ç½ÓÊÕ½áÊø
-            memmove(work_buf, &work_buf[offset + 1], work_len - offset - 1);
-            work_len -= (offset + 1);
-            return;
-        }
-        else
-        {
-            // ·ÇÓÐÐ§Ö¡Í·£¬Ìø¹ýµ±Ç°×Ö½Ú£¨»¬¶¯´°¿Ú£©
-            offset++;
-            // Èç¹ûÌø¹ýÌ«¶àÎÞÐ§Êý¾Ý£¬¼ôÇÐ¹¤×÷Çø
-            if (offset > 512)
-            {
-                // Ê£Óà×Ö½ÚÒÆµ½Í·²¿
-                memmove(work_buf, &work_buf[offset], work_len - offset);
-                work_len -= offset;
-                offset = 0;
-            }
-            continue;
-        }
-
-        // 3.2 ¼ì²éÊÇ·ñÔÜ¹»ÍêÕû°ü
-        if (work_len < offset + pkg_len)
-        {
-            // Êý¾Ý²»¹»£¬ÔÝÊ±ÍË³ö£¬µÈ´ý¸ü¶àÊý¾Ý
-            // µ«ÈôÆ«ÒÆÁ¿ºÜ´ó£¬¿É¼ôÇÐÇ°ÃæµÄÎÞÐ§Êý¾Ý
-            if (offset > 512)
-            {
-                memmove(work_buf, &work_buf[offset], work_len - offset);
-                work_len -= offset;
-                offset = 0;
-            }
-            return;
-        }
-
-        // 3.3 ´ËÊ± work_buf[offset] ¿ªÊ¼ÊÇÒ»¸öÍêÕû°ü£¬½øÐÐÐ£Ñé
-        uint8_t *pkg = &work_buf[offset];
-
-        // Ð£ÑéÐòºÅºÍ·´Âë
-        if ((pkg[1] + pkg[2]) != 0xFF)
-        {
-            // ÐòºÅ´íÎó£¬Ìø¹ýµ±Ç°Ö¡Í·£¬¼ÌÐøÕÒ
-            offset++;
-            continue;
-        }
-
-        // ¼ì²éÐòºÅÊÇ·ñÓëÆÚÍûÆ¥Åä
-        if (pkg[1] != dev->packet_num)
-        {
-            // ¿ÉÄÜÊÇ¾É°üÖØ´«£¨·¢ËÍ¶ËÎ´ÊÕµ½ACK£©
-            // Èç¹ûÐòºÅÊÇÉÏÒ»¸ö°ü£¬¿ÉÒÔ·¢ACK²¢¶ªÆú£»·ñÔò·¢NAK¡£
-            if (pkg[1] == dev->packet_num - 1)
-            {
-                // ÖØ¸´µÄ¾É°ü£¬·¢ËÍACKÈÃ·¢ËÍ¶Ë¼ÌÐø
-                XMODEM_Send_ACK(dev);
-            }
-            else
-            {
-                // ÐòºÅÍêÈ«²»¶Ô£¬·¢NAKÒªÇóÖØ´«
-                XMODEM_Send_NAK(dev);
-            }
-            // Ìø¹ýÕâ¸ö°ü£¬¼ÌÐøÉ¨Ãè
-            offset++;
-            continue;
-        }
-
-        // Ð£Ñé CRC
-        uint16_t recv_crc = (pkg[pkg_len - 2] << 8) | pkg[pkg_len - 1];
-        uint16_t calc_crc = XMODEM_CRC16(&pkg[3], data_len);
-        if (calc_crc != recv_crc)
-        {
-            // CRC ´íÎó£¬·¢ NAK
-            XMODEM_Send_NAK(dev);
-            offset++;
-            continue;
-        }
-
-        // ---------- Ð£ÑéÍ¨¹ý£ºÓÐÐ§Êý¾Ý°ü ----------
-        // µ÷ÓÃ»Øµ÷Ð´ÈëÊý¾Ý
-        if (dev->write_cb != NULL)
-        {
-            dev->write_cb(&pkg[3], data_len);
-        }
-        dev->total_bytes += data_len;
-        dev->packet_num++; // ÆÚÍûÏÂÒ»°üÐòºÅ
-
-        // ·¢ËÍ ACK
-        XMODEM_Send_ACK(dev);
-
-        // ´Ó¹¤×÷ÇøÖÐÒÆ³ýÒÑ´¦ÀíµÄÊý¾Ý£¨°üÀ¨°üÇ°µÄÎÞÐ§×Ö½Ú£©
-        uint16_t consumed = offset + pkg_len;
-        memmove(work_buf, &work_buf[consumed], work_len - consumed);
-        work_len -= consumed;
-        offset = 0; // ÖØÖÃÉ¨ÃèÎ»ÖÃ
-    }
-
-    // 4. Èô¹¤×÷ÇøÀÛ»ý¹ý¶àÎÞÐ§Êý¾Ý£¬Ç¿ÐÐÇå¿Õ
-    if (work_len > 1029 * 2)
-    {
-        work_len = 0;
-        XMODEM_Send_NAK(dev);
-    }
+  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ DMA ï¿½ï¿½ï¿½Õ£ï¿½×¼ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+  if (dev->receiving) {
+    HAL_UARTEx_ReceiveToIdle_DMA(dev->huart, dma_rx_buf, DMA_RX_BUF_SIZE);
+  }
 }

@@ -17,6 +17,7 @@
  */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
+#include "dma.h"
 #include "gpio.h"
 #include "main.h"
 #include "tim.h"
@@ -82,6 +83,12 @@ version_info_t version;
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
+/* USER CODE BEGIN PFP */
+
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
 void LED_MODE(uint8_t state) {
   static uint32_t lastticks = 0;
   static uint32_t gapticks = 0;
@@ -104,15 +111,8 @@ void LED_MODE(uint8_t state) {
 }
 
 void my_console_logger(ulog_level_t lvl, const char *msg) {
-  printf("[%lu][%s]: %s\n", HAL_GetTick(), ulog_level_name(lvl), msg);
+//  printf("[%lu][%s]: %s\n", HAL_GetTick(), ulog_level_name(lvl), msg);
 }
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
-
-/* Private user code ---------------------------------------------------------*/
-/* USER CODE BEGIN 0 */
-
 /* USER CODE END 0 */
 
 /**
@@ -144,16 +144,16 @@ int main(void) {
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer,
-                              MODBUS_RX_BUFFER_SIZE);
+  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, mb_comm.rx_buffer,
+                               MODBUS_RX_BUFFER_SIZE);
   MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs,
               Modbus_write_regs, MODBUS_REG_COUNT);
   Fsm_Init();
-  // 初始XMODEM
-  XMODEM_Init(&xmodem, &huart1, Bootloader_FlashWriteBuffer, 500, 5);
+  XMODEM_Init(&xmodem, &huart1, Bootloader_FlashWriteBuffer, 2000, 5);
   Bootloader_Init();
   ULOG_INIT();
   ULOG_SUBSCRIBE(my_console_logger, ULOG_DEBUG_LEVEL);
@@ -222,17 +222,26 @@ void SystemClock_Config(void) {
 }
 
 /* USER CODE BEGIN 4 */
-// 空闲中断回调函数，参数Size为串口实际接收到数据字节�?
 void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
   if (huart->Instance == USART1) {
-    mb_comm.rx_len = Size;
+		if(Fsm_IsInState() == STATE_PROG_UPGRADE)
+		{
+			XMODEM_UART_RxEventCallback(&xmodem, Size);
+		}else{
+			mb_comm.rx_len = Size;
+			HAL_UARTEx_ReceiveToIdle_DMA(&huart1, mb_comm.rx_buffer,
+                               MODBUS_RX_BUFFER_SIZE);
+		}
+    
   }
 }
-void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart) {
-  if (huart->Instance == USART1) {
-    XMODEM_UART_IRQ_Handler(rxdata); // 将接收到的字节放�? FIFO
-    HAL_UART_Receive_IT(&huart1, &rxdata, 1);
-  }
+
+void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
+{
+    if (huart->Instance == USART1)
+    {
+			XMODEM_UART_RxEventCallback(&xmodem, 0);
+    }
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
