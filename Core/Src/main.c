@@ -111,7 +111,7 @@ void LED_MODE(uint8_t state) {
 }
 
 void my_console_logger(ulog_level_t lvl, const char *msg) {
-//  printf("[%lu][%s]: %s\n", HAL_GetTick(), ulog_level_name(lvl), msg);
+  printf("[%lu][%s]: %s\n", HAL_GetTick(), ulog_level_name(lvl), msg);
 }
 /* USER CODE END 0 */
 
@@ -148,7 +148,7 @@ int main(void) {
   MX_TIM4_Init();
   MX_USART1_UART_Init();
   /* USER CODE BEGIN 2 */
-  HAL_UARTEx_ReceiveToIdle_DMA(&huart1, mb_comm.rx_buffer,
+  HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer,
                                MODBUS_RX_BUFFER_SIZE);
   MODBUS_Init(&Modbus_dev0, 19, Modbus_holding_regs, Modbus_read_regs,
               Modbus_write_regs, MODBUS_REG_COUNT);
@@ -229,19 +229,18 @@ void HAL_UARTEx_RxEventCallback(UART_HandleTypeDef *huart, uint16_t Size) {
 			XMODEM_UART_RxEventCallback(&xmodem, Size);
 		}else{
 			mb_comm.rx_len = Size;
-			HAL_UARTEx_ReceiveToIdle_DMA(&huart1, mb_comm.rx_buffer,
+			HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer,
                                MODBUS_RX_BUFFER_SIZE);
 		}
     
   }
 }
 
-void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
-{
-    if (huart->Instance == USART1)
-    {
-			XMODEM_UART_RxEventCallback(&xmodem, 0);
-    }
+void HAL_UART_TxCpltCallback(UART_HandleTypeDef *huart) {
+
+if (huart->Instance == USART1) {
+
+}
 }
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {

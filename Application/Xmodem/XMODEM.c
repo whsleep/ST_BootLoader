@@ -1,116 +1,55 @@
 #include "XMODEM.h"
 
-/* ---------- ï¿½ê¶¨ï¿½ï¿½ ---------- */
-#define RX_FIFO_SIZE 4096   
-#define DMA_RX_BUF_SIZE 2058 
-#define WORK_BUF_SIZE 2058   
+/* ---------- ±äÁ¿¶¨Òå ---------- */
+uint8_t dma_rx_buf[DMA_RX_BUF_SIZE];
+volatile uint16_t dma_read_idx = 0;  // Ö÷Ñ­»·ÒÑ´¦ÀíÎ»ÖÃ
+volatile uint16_t dma_write_idx = 0; // DMA µ±Ç°Ð´ÈëÎ»ÖÃ
 
-/* ---------- ï¿½ï¿½Ì¬È«ï¿½Ö±ï¿½ï¿½ï¿½ ---------- */
-static uint8_t rx_fifo[RX_FIFO_SIZE];
-static volatile uint16_t fifo_head = 0;
-static volatile uint16_t fifo_tail = 0;
+static uint16_t XMODEM_CRC16_Ring(uint16_t offset, uint16_t len) {
+  uint16_t crc = 0x0000;        // XMODEM ±ê×¼³õÖµ
+  const uint16_t poly = 0x1021; // CCITT ¶àÏîÊ½
 
-static uint8_t dma_rx_buf[DMA_RX_BUF_SIZE];     // DMA ï¿½ï¿½ï¿½Õ»ï¿½ï¿½ï¿½ï¿½ï¿½½
-
-static uint8_t work_buf[WORK_BUF_SIZE];
-static uint16_t work_len = 0;
-static uint32_t work_last_tick = 0;
-
-/* ---------- ï¿½Ú²ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ---------- */
-static uint16_t XMODEM_CRC16(uint8_t *data, uint16_t len);
-static bool XMODEM_Send_Byte(XMODEM_Device *dev, uint8_t ch);
-static bool XMODEM_FIFO_Get(uint8_t *byte);
-static void XMODEM_Send_ACK(XMODEM_Device *dev);
-static void XMODEM_Send_NAK(XMODEM_Device *dev);
-static void XMODEM_Send_CAN(XMODEM_Device *dev);
-static void XMODEM_UART_DMA_Handler(uint8_t *data, uint16_t len);
-
-/*
- *@brief ï¿½ï¿½ï¿½ï¿½ CRC16 Ð£ï¿½ï¿½ï¿½ï¿½
- *@param data: Ö¸ï¿½ï¿½ï¿½ï¿½ï¿½Ýµï¿½Ö¸ï¿½ï¿½
- *@param len: ï¿½ï¿½ï¿½Ý³ï¿½ï¿½ï¿½
- *@return CRC16 Ð£ï¿½ï¿½ï¿½ï¿½
- */
-static uint16_t XMODEM_CRC16(uint8_t *data, uint16_t len) {
-  uint16_t crc = 0x0000;
-  while (len--) {
-    crc ^= (*data++) << 8;
-    for (uint8_t i = 0; i < 8; i++) {
-      if (crc & 0x8000)
-        crc = (crc << 1) ^ 0x1021;
-      else
+  for (uint16_t i = 0; i < len; i++) {
+    uint8_t byte = dma_rx_buf[(dma_read_idx + offset + i) % DMA_RX_BUF_SIZE];
+    crc ^= (uint16_t)byte << 8; // ×Ö½ÚÒì»òµ½¸ß×Ö½Ú
+    for (uint8_t bit = 0; bit < 8; bit++) {
+      if (crc & 0x8000) {
+        crc = (crc << 1) ^ poly;
+      } else {
         crc <<= 1;
+      }
     }
   }
   return crc;
 }
 
-/*
- *@brief ï¿½ï¿½ï¿½Íµï¿½ï¿½Ö½ï¿½ï¿½ï¿½ï¿½ï¿½
- *@param dev: XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½Ö¸ï¿½ï¿½
- *@param ch: Òªï¿½ï¿½ï¿½Íµï¿½ï¿½Ö½ï¿½
- *@return true ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½Í³É¹ï¿½ï¿½ï¿½false ï¿½ï¿½Ê¾ï¿½ï¿½ï¿½ï¿½Ê§ï¿½ï¿½
- */
 static bool XMODEM_Send_Byte(XMODEM_Device *dev, uint8_t ch) {
-  return (HAL_UART_Transmit(dev->huart, &ch, 1, dev->timeout_ms) == HAL_OK);
-}
-
-/*
- *@brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ FIFOï¿½ï¿½ï¿½ï¿½ DMA ï¿½Øµï¿½ï¿½ï¿½ï¿½Ã£ï¿½
- *@param data: ï¿½ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
- *@param len: ï¿½ï¿½ï¿½Ý³ï¿½ï¿½ï¿½
- */
-static void XMODEM_UART_DMA_Handler(uint8_t *data, uint16_t len) {
-  for (uint16_t i = 0; i < len; i++) {
-    uint16_t next = (fifo_head + 1) % RX_FIFO_SIZE;
-    if (next != fifo_tail) // FIFO Î´ï¿½ï¿½
-    {
-      rx_fifo[fifo_head] = data[i];
-      fifo_head = next;
-    } else {
-      break;
-    }
-  }
-}
-
-/*
- *@brief ï¿½ï¿½ï¿½Ý¾É½Ó¿Ú£ï¿½ï¿½ï¿½ï¿½Ö½ï¿½Ð´ï¿½ï¿½ FIFOï¿½ï¿½ï¿½Ñ²ï¿½ï¿½Æ¼ï¿½Ê¹ï¿½Ã£ï¿½
- *@param data: ï¿½ï¿½ï¿½ï¿½ï¿½Ö½ï¿½
- */
-void XMODEM_UART_IRQ_Handler(uint8_t data) {
-  XMODEM_UART_DMA_Handler(&data, 1);
-}
-
-/*
- *@brief ï¿½ï¿½ FIFO ï¿½ï¿½È¡ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Ö½ï¿½
- *@param byte: Ö¸ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½Ö½Úµï¿½Ö¸ï¿½ï¿½
- *@return true ï¿½ï¿½Ê¾È¡ï¿½ï¿½ï¿½É¹ï¿½ï¿½ï¿½false ï¿½ï¿½Ê¾È¡ï¿½ï¿½Ê§ï¿½ï¿½
- */
-static bool XMODEM_FIFO_Get(uint8_t *byte) {
-  if (fifo_head == fifo_tail) // FIFO ï¿½ï¿½
-    return false;
-
-  *byte = rx_fifo[fifo_tail];
-  fifo_tail = (fifo_tail + 1) % RX_FIFO_SIZE;
+  HAL_UART_Transmit_IT(dev->huart, &ch, 1);
   return true;
 }
 
-/* ---------- ï¿½ï¿½ï¿½ï¿½ï¿½Ö·ï¿½ï¿½ï¿½ï¿½ï¿½ ---------- */
 static void XMODEM_Send_ACK(XMODEM_Device *dev) { XMODEM_Send_Byte(dev, 0x06); }
-static void XMODEM_Send_NAK(XMODEM_Device *dev) { XMODEM_Send_Byte(dev, 0x15); }
+static void XMODEM_Send_NAK(XMODEM_Device *dev) {
+   XMODEM_Send_Byte(dev, 0x15);
+}
 static void XMODEM_Send_CAN(XMODEM_Device *dev) {
   XMODEM_Send_Byte(dev, 0x18);
   XMODEM_Send_Byte(dev, 0x18);
 }
 
-/*
- *@brief ï¿½ï¿½Ê¼ï¿½ï¿½ XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½
- *@param dev: Ö¸ï¿½ï¿½ XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
- *@param huart: ï¿½ï¿½ï¿½Ú¾ï¿½ï¿½
- *@param write_cb: ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½Øµï¿½ï¿½ï¿½ï¿½ï¿½
- *@param timeout_ms: ï¿½ï¿½Ê±Ê±ï¿½ä£¨ï¿½ï¿½ï¿½ë£©
- *@param max_retry: ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ô´ï¿½ï¿½ï¿½
- */
+static void XMODEM_DMA_AddIDX(uint16_t inc) {
+  dma_read_idx = (dma_read_idx + inc) % DMA_RX_BUF_SIZE;
+}
+
+static uint16_t XMODEM_Return_ReadIDX(uint16_t inc) {
+  return (dma_read_idx + inc) % DMA_RX_BUF_SIZE;
+}
+
+static uint16_t XMODEM_Get_Valid_Length() {
+  uint16_t size = (dma_write_idx - dma_read_idx + DMA_RX_BUF_SIZE) % DMA_RX_BUF_SIZE;
+	return size;
+}
+
 void XMODEM_Init(XMODEM_Device *dev, UART_HandleTypeDef *huart,
                  XMODEM_WriteCallback write_cb, uint16_t timeout_ms,
                  uint8_t max_retry) {
@@ -125,196 +64,147 @@ void XMODEM_Init(XMODEM_Device *dev, UART_HandleTypeDef *huart,
   dev->receiving = false;
   dev->rx_len = 0;
   dev->last_byte_tick = 0;
-
-  HAL_UART_AbortReceive(dev->huart);
-
-  // ï¿½ï¿½Õ¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ FIFO
-  work_len = 0;
-  work_last_tick = 0;
-  fifo_head = 0;
-  fifo_tail = 0;
 }
 
-/*
- *@brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õ£ï¿½ï¿½ï¿½ï¿½ï¿½ 'C' ï¿½ï¿½ï¿½Ö£ï¿½ï¿½ï¿½Ê¼ï¿½ï¿½ï¿½ï¿½ï¿½Ä¼ï¿½ï¿½ï¿½
- *@param dev: Ö¸ï¿½ï¿½ XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
- */
 void XMODEM_StartReceive(XMODEM_Device *dev) {
   dev->receiving = true;
   dev->packet_num = 1;
   dev->total_bytes = 0;
   dev->eot_received = false;
   dev->can_received = false;
-  work_len = 0;
+  HAL_UART_Abort(dev->huart);
 
-  // ï¿½ï¿½ï¿½ FIFOï¿½ï¿½ï¿½ï¿½Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý¸ï¿½ï¿½ï¿½
-  fifo_head = 0;
-  fifo_tail = 0;
-
-  // Í£Ö¹ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ú½ï¿½ï¿½ÐµÄ½ï¿½ï¿½Õ£ï¿½È»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ DMA ï¿½ï¿½ï¿½ï¿½
-  if (HAL_UARTEx_ReceiveToIdle_DMA(dev->huart, dma_rx_buf, DMA_RX_BUF_SIZE) !=
-      HAL_OK) {
-    dev->receiving = false;
-    return;
+  __HAL_UART_CLEAR_IDLEFLAG(dev->huart);
+  __HAL_UART_CLEAR_OREFLAG(dev->huart); // Çå³ýÒç³ö±êÖ¾
+  while (HAL_UARTEx_ReceiveToIdle_DMA(dev->huart, dma_rx_buf,
+                                      DMA_RX_BUF_SIZE - 1) != HAL_OK) {
   }
 
-  // ï¿½ï¿½ï¿½ï¿½ 'C' ï¿½ï¿½ï¿½ï¿½ CRC Ä£Ê½
   XMODEM_Send_Byte(dev, 0x43);
 }
 
-/*
- *@brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½ï¿½Ã£ï¿½
- *@param dev: Ö¸ï¿½ï¿½ XMODEM ï¿½è±¸ï¿½á¹¹ï¿½ï¿½ï¿½Ö¸ï¿½ï¿½
- */
 void XMODEM_Poll(XMODEM_Device *dev) {
   if (!dev->receiving)
     return;
 
-  uint8_t byte;
-
-  // 1. ï¿½ï¿½ FIFO ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ö½ï¿½È¡ï¿½ï¿½ï¿½ï¿½×·ï¿½Óµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-	while (XMODEM_FIFO_Get(&byte)) {
-			if (work_len < WORK_BUF_SIZE) {
-					work_buf[work_len++] = byte;
-					work_last_tick = HAL_GetTick();
-			}else{
-				  // »º³åÇøÂú£¬Ç¿ÖÆÇå¿Õ²¢ NAK£¬±ÜÃâËÀËø
-					work_len = 0;
-					XMODEM_Send_NAK(dev);
-					break;
-			}
-	}
-
-  // 2. ï¿½ï¿½Ê±ï¿½ï¿½é£ºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ýµï¿½ï¿½ï¿½Ê±ï¿½ï¿½Î´ï¿½Õµï¿½ï¿½ï¿½ï¿½Ö½Ú£ï¿½ï¿½ï¿½ï¿½ï¿½Õ²ï¿½ï¿½ï¿½ï¿½ï¿½ NAK
-  if ((HAL_GetTick() - work_last_tick) > dev->timeout_ms) {
-    work_len = 0;
-    XMODEM_Send_NAK(dev);
-		work_last_tick = HAL_GetTick();
-    return;
-  }
-
-  // 3. É¨ï¿½è¹¤ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ñ°ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý°ï¿½
-  uint16_t offset = 0;
-  while (offset < work_len) {
-    uint8_t type = work_buf[offset];
-    uint16_t data_len = 0;
-    uint16_t pkg_len = 0;
-
-    // 3.1 Ê¶ï¿½ï¿½Ö¡Í·
-    if (type == 0x01) // SOH
-    {
-      data_len = 128;
-      pkg_len = 1 + 2 + 128 + 2; // 133
-    } else if (type == 0x02)     // STX
-    {
-      data_len = 1024;
-      pkg_len = 1 + 2 + 1024 + 2; // 1029
-    } else if (type == 0x04)      // EOT
-    {
+  while (XMODEM_Get_Valid_Length() > 0) {
+    uint8_t head = dma_rx_buf[dma_read_idx]; // ¶ÁÈ¡Í·×Ö·û
+    // ÓÐÏÞ´¦ÀíÌØÊâ×Ö·û
+    if (head == 0x04) { // EOT
+      XMODEM_DMA_AddIDX(1);
       XMODEM_Send_ACK(dev);
       dev->eot_received = true;
       dev->receiving = false;
-      __disable_irq();
-      HAL_UART_AbortReceive(dev->huart); // Í£Ö¹ DMA ï¿½ï¿½ï¿½ï¿½
-      __enable_irq();
-      memmove(work_buf, &work_buf[offset + 1], work_len - offset - 1);
-      work_len -= (offset + 1);
       return;
-    } else if (type == 0x18) // CAN
-    {
+    }
+    if (head == 0x18) { // CAN
+      XMODEM_DMA_AddIDX(1);
+      // ÈôÁ¬ÐøÁ½¸ö CAN£¬¿ÉÊÓÎªÈ¡Ïû£¬ÕâÀï¼òµ¥´¦Àí
       dev->can_received = true;
       dev->receiving = false;
-      __disable_irq();
-      HAL_UART_AbortReceive(dev->huart); // Í£Ö¹ DMA ï¿½ï¿½ï¿½ï¿½
-      __enable_irq();
-      memmove(work_buf, &work_buf[offset + 1], work_len - offset - 1);
-      work_len -= (offset + 1);
       return;
+    }
+    uint16_t data_len;
+    uint16_t frame_len;
+    // ´¦ÀíÍ·×Ö·û
+    if (head == 0x01) {
+      data_len = 128;
+      frame_len = 128 + 5;
+    }else if (head == 0x02) { // STX
+      data_len = DATA_LEN;
+      frame_len = FRAME_LEN;
     } else {
-      // ï¿½ï¿½ï¿½ï¿½Ð§Ö¡Í·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½Ö½ï¿½
-      offset++;
-      if (offset > 512) {
-        memmove(work_buf, &work_buf[offset], work_len - offset);
-        work_len -= offset;
-        offset = 0;
-      }
+      XMODEM_DMA_AddIDX(1);
       continue;
     }
-
-    // 3.2 ï¿½ï¿½ï¿½Ý²ï¿½ï¿½ã£¬ï¿½Ë³ï¿½ï¿½È´ï¿½
-    if (work_len < offset + pkg_len) {
-      if (offset > 512) {
-        memmove(work_buf, &work_buf[offset], work_len - offset);
-        work_len -= offset;
-        offset = 0;
+    // Êý¾ÝÖ¡²»ÍêÕû£¬µÈ´ýÏÂÒ»ÂÖ
+    if (XMODEM_Get_Valid_Length() < frame_len) {
+      // ¼ì²é³¬Ê±
+      if (HAL_GetTick() - dev->last_byte_tick >= dev->timeout_ms) {
+        if (dev->retry_count < dev->max_retry) {
+          XMODEM_Send_NAK(dev);
+          dev->retry_count++;
+          dev->last_byte_tick = HAL_GetTick();
+          dma_read_idx = dma_write_idx;
+        } else {
+        }
       }
       return;
     }
-
-    // 3.3 ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½ï¿½
-    uint8_t *pkg = &work_buf[offset];
-
-    // Ð£ï¿½ï¿½ï¿½ï¿½ÅºÍ·ï¿½ï¿½ï¿½
-    if ((pkg[1] + pkg[2]) != 0xFF) {
-      offset++;
+    // ¶ÁÈ¡°üÐòºÅ¼°·´Âë
+    uint8_t block_num = dma_rx_buf[XMODEM_Return_ReadIDX(1)];
+    uint8_t inverse_num = dma_rx_buf[XMODEM_Return_ReadIDX(2)];
+    // ÐòºÅ·´ÂëÐ£Ñé
+    if ((uint8_t)(block_num + inverse_num) != 0xFF) {
+      // Ö¡Í·¿ÉÄÜÎóÅÐ£¬»¬¶¯Ò»¸ö×Ö½Ú¼ÌÐøÕÒÏÂÒ»¸ö SOH/STX
+      XMODEM_DMA_AddIDX(1);
       continue;
     }
-
-    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ¥ï¿½ï¿½
-    if (pkg[1] != dev->packet_num) {
-      if (pkg[1] == dev->packet_num - 1) {
-        XMODEM_Send_ACK(dev); // ï¿½Ø¸ï¿½ï¿½É°ï¿½ï¿½ï¿½ï¿½ï¿½ ACK
+    // ÐòºÅ´¦Àí
+    if (block_num != dev->packet_num) {
+      if (block_num == (uint8_t)(dev->packet_num - 1)) {
+        XMODEM_Send_ACK(dev);
       } else {
-        XMODEM_Send_NAK(dev); // ï¿½ï¿½Å´ï¿½ï¿½ó£¬·ï¿½ NAK
+        if (dev->retry_count < dev->max_retry) {
+          XMODEM_Send_NAK(dev);
+          dev->retry_count++;
+        } else {
+          return;
+        }
       }
-      offset += pkg_len;   // Ìø¹ýÕû¸ö°ü
+      // ¶ªÆúÕû¸öÖ¡£¨ÎÞÂÛÖØ¸´»¹ÊÇ´íÎó£©
+      XMODEM_DMA_AddIDX(frame_len);
       continue;
     }
+    // CRC Ð£Ñé
+    uint16_t cal_crc = XMODEM_CRC16_Ring(3, data_len);
+    uint8_t crc_hi = dma_rx_buf[XMODEM_Return_ReadIDX(3 + data_len)];
+    uint8_t crc_lo = dma_rx_buf[XMODEM_Return_ReadIDX(3 + data_len + 1)];
+    uint16_t recv_crc = ((uint16_t)crc_hi << 8) | crc_lo;
 
-    // Ð£ï¿½ï¿½ CRC
-    uint16_t recv_crc = (pkg[pkg_len - 2] << 8) | pkg[pkg_len - 1];
-    uint16_t calc_crc = XMODEM_CRC16(&pkg[3], data_len);
-    if (calc_crc != recv_crc) {
-      XMODEM_Send_NAK(dev);
-      offset += pkg_len;   // Ìø¹ýÕû¸ö°ü
+    if (cal_crc != recv_crc) {
+      // CRC ´íÎó£¬¶ªÆúÕû¸öÖ¡£¬ÇëÇóÖØ·¢
+      XMODEM_DMA_AddIDX(frame_len);
+      if (dev->retry_count < dev->max_retry) {
+        XMODEM_Send_NAK(dev);
+        dev->retry_count++;
+      } else {
+        return;
+      }
       continue;
     }
-
-    // ---------- Ð£ï¿½ï¿½Í¨ï¿½ï¿½ ----------
+    // ½«Êý¾Ý¿½±´µ½Á¬Ðø»º³åÇø dev->rx_buf£¨±ÜÃâ»·ÐÎÔ½½ç£©
+    for (uint16_t i = 0; i < data_len; i++) {
+      dev->rx_buf[i] = dma_rx_buf[XMODEM_Return_ReadIDX(3 + i)];
+    }
+    // Ö¡ÕýÈ·£ºÐ´ÈëÊý¾Ý
     if (dev->write_cb != NULL) {
-      dev->write_cb(&pkg[3], data_len);
+      dev->write_cb(dev->rx_buf, data_len);
     }
     dev->total_bytes += data_len;
     dev->packet_num++;
-
+    // ·¢ËÍ ACK
     XMODEM_Send_ACK(dev);
-
-    // ï¿½Æ³ï¿½ï¿½Ñ´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ý£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ç°ï¿½ï¿½ï¿½ï¿½Ð§ï¿½Ö½Ú£ï¿½
-    uint16_t consumed = offset + pkg_len;
-    memmove(work_buf, &work_buf[consumed], work_len - consumed);
-    work_len -= consumed;
-    offset = 0; // ï¿½ï¿½ï¿½ï¿½É¨ï¿½ï¿½Î»ï¿½ï¿½
+    // ³É¹¦½ÓÊÕÒ»Ö¡£¬ÇåÁãÖØÊÔ¼ÆÊý
+    dev->retry_count = 0;
+    // ¶ªÆúÒÑ´¦ÀíµÄÖ¡
+    XMODEM_DMA_AddIDX(frame_len);
   }
-
-  // 4. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Û»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½ï¿½Ý£ï¿½Ç¿ï¿½ï¿½ï¿½ï¿½ï¿½
-  if (work_len >= WORK_BUF_SIZE) {
-    work_len = 0;
-    XMODEM_Send_NAK(dev);
+  // ÎÞÊý¾Ý£º¼ì²é³¬Ê±
+  if (XMODEM_Get_Valid_Length() == 0) {
+    if (HAL_GetTick() - dev->last_byte_tick >= dev->timeout_ms) {
+      if (dev->retry_count < dev->max_retry) {
+        XMODEM_Send_NAK(dev);
+        dev->retry_count++;
+        dev->last_byte_tick = HAL_GetTick();
+      } else {
+      }
+    }
+    return;
   }
 }
 
-/*
- *@brief ï¿½ï¿½ï¿½Ã»ï¿½ï¿½ï¿½ HAL_UARTEx_RxEventCallback ï¿½Ðµï¿½ï¿½ÃµÄ´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
- *@param huart: ï¿½ï¿½ï¿½ï¿½ï¿½Øµï¿½ï¿½Ä´ï¿½ï¿½Ú¾ï¿½ï¿½
- *@param size: ï¿½ï¿½ï¿½Î½ï¿½ï¿½Õµï¿½ï¿½ï¿½ï¿½Ö½ï¿½ï¿½ï¿½
- */
 void XMODEM_UART_RxEventCallback(XMODEM_Device *dev, uint16_t size) {
-
-  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Õµï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ FIFO
-  XMODEM_UART_DMA_Handler(dma_rx_buf, size);
-
-  // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ DMA ï¿½ï¿½ï¿½Õ£ï¿½×¼ï¿½ï¿½ï¿½ï¿½Ò»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-  if (dev->receiving) {
-    HAL_UARTEx_ReceiveToIdle_DMA(dev->huart, dma_rx_buf, DMA_RX_BUF_SIZE);
-  }
+  dma_write_idx = size % DMA_RX_BUF_SIZE;
+  dev->last_byte_tick = HAL_GetTick();
 }
