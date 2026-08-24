@@ -32,7 +32,7 @@
 #include "fsm_bootloader.h"
 #include "fsm_event.h"
 #include "ulog.h"
-
+#include "boot_decode.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -155,6 +155,7 @@ int main(void) {
   Fsm_Init();
   XMODEM_Init(&xmodem, &huart1, Bootloader_FlashWriteBuffer, 2000, 5);
   Bootloader_Init();
+	boot_decode_init();
   ULOG_INIT();
   ULOG_SUBSCRIBE(my_console_logger, ULOG_DEBUG_LEVEL);
   HAL_TIM_Base_Start_IT(&htim4);

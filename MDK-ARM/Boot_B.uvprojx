@@ -638,6 +638,31 @@
           </Files>
         </Group>
         <Group>
+          <GroupName>Application/HeatShrink</GroupName>
+          <Files>
+            <File>
+              <FileName>boot_decode.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Application\HeatShrink\boot_decode.c</FilePath>
+            </File>
+            <File>
+              <FileName>heatshrink_decoder.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\Application\HeatShrink\heatshrink_decoder.c</FilePath>
+            </File>
+            <File>
+              <FileName>heatshrink_common.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Application\HeatShrink\heatshrink_common.h</FilePath>
+            </File>
+            <File>
+              <FileName>heatshrink_config.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\Application\HeatShrink\heatshrink_config.h</FilePath>
+            </File>
+          </Files>
+        </Group>
+        <Group>
           <GroupName>::CMSIS</GroupName>
         </Group>
       </Groups>

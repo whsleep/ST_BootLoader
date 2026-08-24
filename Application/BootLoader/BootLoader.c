@@ -4,6 +4,10 @@ static uint32_t write_cache = 0;
 static uint8_t cache_bytes = 0;
 static uint32_t current_addr = APP_ADDRESS; // 设定起始地址
 
+static uint32_t fw_size = 0;        
+static uint32_t received_total = 0;  
+static uint8_t is_first = 1;        
+
 /**
  * @brief 检查当前 Flash 中的 APP 是否有效
  * @return true 有效，false 无效
@@ -197,6 +201,10 @@ uint8_t Bootloader_FlashBegin(void)
     current_addr = APP_ADDRESS;
     write_cache = 0;
     cache_bytes = 0;
+	
+    fw_size = 0;
+    received_total = 0;
+    is_first = 1;
 
     HAL_FLASH_Unlock();
     // 解锁后立即清除所有错误标志 + EOP 标志，确保状态寄存器干净
@@ -219,7 +227,35 @@ uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len)
 
     if (len == 0)
         return BL_OK;
-
+		
+    __disable_irq(); /* 写入期间关闭中断 */
+		
+		/* 执行解压过程 */
+		uint16_t original_len = len;  // 保存本次原始长度，用于累计总接收量
+    if (is_first) {
+        if (len < 4) 
+				{
+					  __enable_irq();
+            return BL_SIZE_ERROR;
+				}	
+        // 读取4字节小端长度
+        fw_size = (uint32_t)data[0] |
+                  ((uint32_t)data[1] << 8) |
+                  ((uint32_t)data[2] << 16) |
+                  ((uint32_t)data[3] << 24);
+				
+        // 合法性检查：fw_size 必须至少为4（头部）
+        if (fw_size < 4 || (fw_size - 4) > APP_SIZE)
+        {
+            __enable_irq();
+            return BL_SIZE_ERROR;
+        }
+				
+        data += 4;
+        len -= 4;
+        is_first = 0;
+    }
+		
     /* 检查地址是否越界（预留 8 字节余量） */
     if (current_addr > (FLASH_END - 8))
     {
@@ -227,8 +263,6 @@ uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len)
         HAL_FLASH_Lock();
         return BL_WRITE_ERROR;
     }
-
-    __disable_irq(); /* 写入期间关闭中断 */
 
     for (i = 0; i < len; i++)
     {
