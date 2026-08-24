@@ -14,6 +14,7 @@ enum eBootloaderErrorCodes
     BL_CHKS_ERROR,
     BL_ERASE_ERROR,
     BL_WRITE_ERROR,
+    BL_DECODE_ERROR,
     BL_OBP_ERROR
 };
 

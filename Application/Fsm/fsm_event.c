@@ -9,7 +9,7 @@ extern uint8_t rxdata;
 extern XMODEM_Device xmodem;
 extern version_info_t version;
 
-/* ´Ó Modbus ¼Ä´æÆ÷ÌáÈ¡ÃüÁîÊý¾Ý */
+/* ï¿½ï¿½ Modbus ï¿½Ä´ï¿½ï¿½ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ */
 #define MODBUS_06_REC Modbus_write_regs[0]
 #define MODBUS_03_REC Modbus_read_regs[0]
 #define MODBUS_REC Modbus_holding_regs[0]
@@ -21,7 +21,7 @@ extern version_info_t version;
 /* ---------------- ×´Ì¬ STATE_MODBUS_RECV ---------------- */
 
 /**
- * @brief ½øÈëµÈ´ýÃüÁî×´Ì¬£ºÆô¶¯³¬Ê±¶¨Ê±Æ÷
+ * @brief ï¿½ï¿½ï¿½ï¿½È´ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½Ê±ï¿½ï¿?
  */
 void ModbusRecv_Entry(void) {
   ULOG_INFO("Entering STATE_MODBUS_RECV");
@@ -29,19 +29,19 @@ void ModbusRecv_Entry(void) {
 }
 
 /**
- * @brief µÈ´ýÃüÁî×´Ì¬µÄºËÐÄÖ´ÐÐ£º¼ì²éÃüÁî»ò³¬Ê±
- * @return ²úÉúµÄÊÂ¼þ£¬ÈôÎÞÊÂ¼þÔò·µ»Ø EVENT_NONE
+ * @brief ï¿½È´ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½Äºï¿½ï¿½ï¿½Ö´ï¿½Ð£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±
+ * @return ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ò·µ»ï¿½ EVENT_NONE
  */
 BootEvent ModbusRecv_Do(void) {
-  // ¼ì²âÊÇ·ñÊÕµ½ºÏ·¨µÄÉý¼¶´¥·¢ÃüÁî
+  // ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ï¿½Õµï¿½ï¿½Ï·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿?
   if (MODBUS_REC == 0x5B5B && MODBUS_06_REC > 0 && MODBUS_03_REC > 0) {
     ULOG_INFO("Received legal 0x06 command, triggering upgrade");
-    StopTimeout(); // ÊÕµ½ÃüÁî£¬Í£Ö¹³¬Ê±
+    StopTimeout(); // ï¿½Õµï¿½ï¿½ï¿½ï¿½î£¬Í£Ö¹ï¿½ï¿½Ê±
     return EVENT_RECV_LEGAL_06H;
   }
   if (mb_comm.rx_len > 0) {
     uint16_t len = mb_comm.rx_len;
-    mb_comm.rx_len = 0; // Á¢¼´ÊÍ·Å±êÖ¾Î»£¬ÔÊÐíÖÐ¶Ï¼ÇÂ¼ÐÂÖ¡
+    mb_comm.rx_len = 0; // ï¿½ï¿½ï¿½ï¿½ï¿½Í·Å±ï¿½Ö¾Î»ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð¶Ï¼ï¿½Â¼ï¿½ï¿½Ö¡
     MODBUS_Status sta =
         MODBUS_Process_Frame(&Modbus_dev0, mb_comm.rx_buffer, &len,
                              mb_comm.tx_buffer, &mb_comm.tx_len);
@@ -51,7 +51,7 @@ BootEvent ModbusRecv_Do(void) {
     HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer,
                                 MODBUS_RX_BUFFER_SIZE);
   }
-  // ³¬Ê±¼ì²â
+  // ï¿½ï¿½Ê±ï¿½ï¿½ï¿?
   if (IsTimeout()) {
     ULOG_INFO("Timeout in STATE_MODBUS_RECV");
     StopTimeout();
@@ -61,41 +61,47 @@ BootEvent ModbusRecv_Do(void) {
       return EVENT_TIMEOUT_APP_INVALID;
   }
 
-  return EVENT_NONE; // ÎÞÊÂ¼þ£¬±£³Ö×´Ì¬
+  return EVENT_NONE; // ï¿½ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬
 }
 
 void ModbusRecv_Exit(void) {
   ULOG_INFO("Exiting STATE_MODBUS_RECV");
+  HAL_UART_AbortReceive(&huart1); // ÖÕÖ¹µ±Ç°½ÓÊÕ£¨°üÀ¨½ûÓÃIDLEÖÐ¶Ï£©
+  HAL_UART_Receive_IT(&huart1, &rxdata, 1); // ¿ªÆôµ¥×Ö½Ú½ÓÊÕ
 }
 
 /* ---------------- ×´Ì¬ STATE_PROG_UPGRADE ---------------- */
 
 /**
- * @brief ½øÈëÉý¼¶×´Ì¬£ºÆô¶¯³¬Ê±¶¨Ê±Æ÷£¨ÉÕÐ´³¬Ê±±£»¤£©
+ * @brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ê±ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
  */
 void ProgUpgrade_Entry(void) {
   ULOG_INFO("Entering STATE_PROG_UPGRADE");
-  // ²Á³ý APP Çø£¨ÉÈÇø 2~5£©
+  // ï¿½ï¿½ï¿½ï¿½ APP ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 2~5ï¿½ï¿½
   if (Bootloader_Erase() != BL_OK) {
-    // ²Á³ýÊ§°Ü£¬ÉÏ±¨´íÎó£¬¿ÉÄÜËÀÑ­»·»òµÈ´ý¸´Î»
+    // ï¿½ï¿½ï¿½ï¿½Ê§ï¿½Ü£ï¿½ï¿½Ï±ï¿½ï¿½ï¿½ï¿½ó£¬¿ï¿½ï¿½ï¿½ï¿½ï¿½Ñ­ï¿½ï¿½ï¿½ï¿½È´ï¿½ï¿½ï¿½Î?
     Error_Handler();
   }
-  Bootloader_FlashBegin(); // ¿ªÊ¼ Flash Ð´Èë
+  Bootloader_FlashBegin(); // ï¿½ï¿½Ê¼ Flash Ð´ï¿½ï¿½
   XMODEM_StartReceive(&xmodem);
   StartTimeout();
 }
 
 /**
- * @brief Éý¼¶×´Ì¬µÄºËÐÄÖ´ÐÐ£ºÄ£ÄâÉÕÐ´½ø¶È»ò¼ì²â³¬Ê±
- * @return ²úÉúµÄÊÂ¼þ
- * @note Êµ¼ÊÏîÄ¿ÖÐÓ¦¼ì²é Flash_GetStatus() µÈÓ²¼þ×´Ì¬
+ * @brief ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½Äºï¿½ï¿½ï¿½Ö´ï¿½Ð£ï¿½Ä£ï¿½ï¿½ï¿½ï¿½Ð´ï¿½ï¿½ï¿½È»ï¿½ï¿½â³¬Ê±
+ * @return ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Â¼ï¿½
+ * @note Êµï¿½ï¿½ï¿½ï¿½Ä¿ï¿½ï¿½Ó¦ï¿½ï¿½ï¿? Flash_GetStatus() ï¿½ï¿½Ó²ï¿½ï¿½×´Ì¬
  */
 BootEvent ProgUpgrade_Do(void) {
 
   XMODEM_Poll(&xmodem);
-  // ÅÐ¶ÏÊÇ·ñ½áÊø½ÓÊÕ
+  // ï¿½Ð¶ï¿½ï¿½Ç·ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿?
   if (xmodem.eot_received == true) {
-    Bootloader_FlashEnd(); // ½áÊø Flash Ð´Èë£¬´¦ÀíÊ£Óà»º´æ
+    uint8_t flash_end_ret = Bootloader_FlashEnd(); // ï¿½ï¿½ï¿½ï¿½ Flash Ð´ï¿½ë£¬ï¿½ï¿½ï¿½ï¿½Ê£ï¿½à»ºï¿½ï¿½
+    if (flash_end_ret != BL_OK) {
+      ULOG_ERROR("FlashEnd failed with error code %d\n", flash_end_ret);
+      return EVENT_BURN_COMPLETE_APP_INVALID;
+    }
     version.app_end_addr = ReturnCurrentAddr();
     version.app_ver_major = APP_VERSION_MAJOR;
     version.app_ver_minor = APP_VERSION_MINOR;
@@ -105,7 +111,7 @@ BootEvent ProgUpgrade_Do(void) {
     } else {
       ULOG_INFO("Version Info write fail\n");
     }
-    if (CheckAppValid()) // ¼ì²é APP Ä§ÊýÊÇ·ñÓÐÐ§
+    if (CheckAppValid()) // ï¿½ï¿½ï¿? APP Ä§ï¿½ï¿½ï¿½Ç·ï¿½ï¿½ï¿½Ð§
     {
       ULOG_INFO("APP is valid");
       return EVENT_BURN_COMPLETE_APP_VALID;
@@ -119,21 +125,21 @@ BootEvent ProgUpgrade_Do(void) {
 
 void ProgUpgrade_Exit(void) {
   ULOG_INFO("Exiting STATE_PROG_UPGRADE");
-  // ÍË³öÉý¼¶×´Ì¬Ê±µÄÇåÀí
+  // ï¿½Ë³ï¿½ï¿½ï¿½ï¿½ï¿½×´Ì¬Ê±ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 }
 
 /* ---------------- ×´Ì¬ STATE_JUMP_APP ---------------- */
 
 /**
- * @brief ½øÈëÌø×ª×´Ì¬£ºÖ´ÐÐÌø×ª£¨Í¨³£²»·µ»Ø£©
+ * @brief ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½×ª×´Ì¬ï¿½ï¿½Ö´ï¿½ï¿½ï¿½ï¿½×ªï¿½ï¿½Í¨ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø£ï¿½
  */
 void JumpApp_Entry(void) {
   ULOG_INFO("Entering STATE_JUMP_APP");
-  // Êµ¼ÊÓ¦µ÷ÓÃ JumpToApp();  // ¸Ãº¯Êý²»»á·µ»Ø
+  // Êµï¿½ï¿½Ó¦ï¿½ï¿½ï¿½ï¿½ JumpToApp();  // ï¿½Ãºï¿½ï¿½ï¿½ï¿½ï¿½ï¿½á·µï¿½ï¿½
 }
 
 /**
- * @brief Ìø×ª×´Ì¬µÄºËÐÄÖ´ÐÐ£¨´Ë×´Ì¬ÎªÖÕÌ¬£¬Ò»°ãÎÞ²Ù×÷£©
+ * @brief ï¿½ï¿½×ª×´Ì¬ï¿½Äºï¿½ï¿½ï¿½Ö´ï¿½Ð£ï¿½ï¿½ï¿½×´Ì¬Îªï¿½ï¿½Ì¬ï¿½ï¿½Ò»ï¿½ï¿½ï¿½Þ²ï¿½ï¿½ï¿½ï¿½ï¿½
  */
 BootEvent JumpApp_Do(void) {
   BootJumpAPP();
@@ -145,5 +151,5 @@ BootEvent JumpApp_Do(void) {
 }
 
 void JumpApp_Exit(void) {
-  // ÎÞ²Ù×÷
+  // ï¿½Þ²ï¿½ï¿½ï¿½
 }
