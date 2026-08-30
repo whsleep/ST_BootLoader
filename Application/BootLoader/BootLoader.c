@@ -163,8 +163,7 @@ static uint8_t Flash_WriteByte(uint8_t byte) {
  */
 static size_t Bootloader_DecodeSink(const uint8_t *out, size_t len) {
   for (size_t i = 0; i < len; i++) {
-    /* 已写满预期大小，丢弃填充产生的多余输
-     */
+    // 已写满预期大小，丢弃填充产生的多余输
     if (decoded_total >= fw_size)
       break;
 

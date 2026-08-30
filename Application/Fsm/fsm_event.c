@@ -9,7 +9,7 @@ extern uint8_t rxdata;
 extern XMODEM_Device xmodem;
 extern version_info_t version;
 
-/* �� Modbus �Ĵ�����ȡ�������� */
+/* 从 Modbus 寄存器提取命令数据 */
 #define MODBUS_06_REC Modbus_write_regs[0]
 #define MODBUS_03_REC Modbus_read_regs[0]
 #define MODBUS_REC Modbus_holding_regs[0]
@@ -18,10 +18,10 @@ extern version_info_t version;
 #define APP_VERSION_MINOR Modbus_holding_regs[2]
 #define APP_VERSION_PATCH Modbus_holding_regs[3]
 
-/* ---------------- ״̬ STATE_MODBUS_RECV ---------------- */
+/* ---------------- ״STATE_MODBUS_RECV ---------------- */
 
 /**
- * @brief ����ȴ�����״̬��������ʱ��ʱ��?
+ * @brief 进入等待命令状态：启动超时定时器
  */
 void ModbusRecv_Entry(void) {
   ULOG_INFO("Entering STATE_MODBUS_RECV");
@@ -29,19 +29,19 @@ void ModbusRecv_Entry(void) {
 }
 
 /**
- * @brief �ȴ�����״̬�ĺ���ִ�У���������ʱ
- * @return �������¼��������¼��򷵻� EVENT_NONE
+ * @brief 等待命令状态的核心执行：检查命令或超时
+ * @return 产生的事件，若无事件则返回 EVENT_NONE
  */
 BootEvent ModbusRecv_Do(void) {
-  // ����Ƿ��յ��Ϸ���������������?
+  // 检测是否收到合法的升级触发命令
   if (MODBUS_REC == 0x5B5B && MODBUS_06_REC > 0 && MODBUS_03_REC > 0) {
     ULOG_INFO("Received legal 0x06 command, triggering upgrade");
-    StopTimeout(); // �յ����ֹͣ��ʱ
+    StopTimeout();
     return EVENT_RECV_LEGAL_06H;
   }
   if (mb_comm.rx_len > 0) {
     uint16_t len = mb_comm.rx_len;
-    mb_comm.rx_len = 0; // �����ͷű�־λ�������жϼ�¼��֡
+    mb_comm.rx_len = 0; // 立即释放标志位，允许中断记录新帧
     MODBUS_Status sta =
         MODBUS_Process_Frame(&Modbus_dev0, mb_comm.rx_buffer, &len,
                              mb_comm.tx_buffer, &mb_comm.tx_len);
@@ -51,7 +51,7 @@ BootEvent ModbusRecv_Do(void) {
     HAL_UARTEx_ReceiveToIdle_IT(&huart1, mb_comm.rx_buffer,
                                 MODBUS_RX_BUFFER_SIZE);
   }
-  // ��ʱ���?
+  // 超时检测
   if (IsTimeout()) {
     ULOG_INFO("Timeout in STATE_MODBUS_RECV");
     StopTimeout();
@@ -61,43 +61,43 @@ BootEvent ModbusRecv_Do(void) {
       return EVENT_TIMEOUT_APP_INVALID;
   }
 
-  return EVENT_NONE; // ���¼�������״̬
+  return EVENT_NONE; // 无事件，保持状态
 }
 
 void ModbusRecv_Exit(void) {
   ULOG_INFO("Exiting STATE_MODBUS_RECV");
-  HAL_UART_AbortReceive(&huart1); // ��ֹ��ǰ���գ���������IDLE�жϣ�
-  HAL_UART_Receive_IT(&huart1, &rxdata, 1); // �������ֽڽ���
+  HAL_UART_AbortReceive(&huart1);
+  HAL_UART_Receive_IT(&huart1, &rxdata, 1);
 }
 
 /* ---------------- ״̬ STATE_PROG_UPGRADE ---------------- */
 
 /**
- * @brief ��������״̬��������ʱ��ʱ������д��ʱ������
+ * @brief 进入升级状态：启动超时定时器（烧写超时保护）
  */
 void ProgUpgrade_Entry(void) {
   ULOG_INFO("Entering STATE_PROG_UPGRADE");
-  // ���� APP �������� 2~5��
+  // 擦除 APP 区（扇区 2~5）
   if (Bootloader_Erase() != BL_OK) {
-    // ����ʧ�ܣ��ϱ����󣬿�����ѭ����ȴ����?
+    // 擦除失败，上报错误，可能死循环或等待复位
     Error_Handler();
   }
-  Bootloader_FlashBegin(); // ��ʼ Flash д��
+  Bootloader_FlashBegin(); // 开始 Flash 写入
   XMODEM_StartReceive(&xmodem);
   StartTimeout();
 }
 
 /**
- * @brief ����״̬�ĺ���ִ�У�ģ����д���Ȼ��ⳬʱ
- * @return �������¼�
- * @note ʵ����Ŀ��Ӧ���? Flash_GetStatus() ��Ӳ��״̬
+ * @brief 升级状态的核心执行：模拟烧写进度或检测超时
+ * @return 产生的事件
+ * @note 实际项目中应检查 Flash_GetStatus() 等硬件状态
  */
 BootEvent ProgUpgrade_Do(void) {
 
   XMODEM_Poll(&xmodem);
-  // �ж��Ƿ��������?
+  // 判断是否结束接收
   if (xmodem.eot_received == true) {
-    uint8_t flash_end_ret = Bootloader_FlashEnd(); // ���� Flash д�룬����ʣ�໺��
+    uint8_t flash_end_ret = Bootloader_FlashEnd();
     if (flash_end_ret != BL_OK) {
       ULOG_ERROR("FlashEnd failed with error code %d\n", flash_end_ret);
       return EVENT_BURN_COMPLETE_APP_INVALID;
@@ -111,8 +111,7 @@ BootEvent ProgUpgrade_Do(void) {
     } else {
       ULOG_INFO("Version Info write fail\n");
     }
-    if (CheckAppValid()) // ���? APP ħ���Ƿ���Ч
-    {
+    if (CheckAppValid()) {
       ULOG_INFO("APP is valid");
       return EVENT_BURN_COMPLETE_APP_VALID;
     } else {
@@ -125,21 +124,21 @@ BootEvent ProgUpgrade_Do(void) {
 
 void ProgUpgrade_Exit(void) {
   ULOG_INFO("Exiting STATE_PROG_UPGRADE");
-  // �˳�����״̬ʱ������
+  // 退出升级状态时的清理
 }
 
 /* ---------------- ״̬ STATE_JUMP_APP ---------------- */
 
 /**
- * @brief ������ת״̬��ִ����ת��ͨ�������أ�
+ * @brief 进入跳转状态：执行跳转（通常不返回）
  */
 void JumpApp_Entry(void) {
   ULOG_INFO("Entering STATE_JUMP_APP");
-  // ʵ��Ӧ���� JumpToApp();  // �ú������᷵��
+  // 实际应调用 JumpToApp();  // 该函数不会返回
 }
 
 /**
- * @brief ��ת״̬�ĺ���ִ�У���״̬Ϊ��̬��һ���޲�����
+ * @brief 跳转状态的核心执行（此状态为终态，一般无操作）
  */
 BootEvent JumpApp_Do(void) {
   BootJumpAPP();
@@ -151,5 +150,5 @@ BootEvent JumpApp_Do(void) {
 }
 
 void JumpApp_Exit(void) {
-  // �޲���
+  // 无操作s
 }
