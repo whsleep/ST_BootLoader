@@ -13,7 +13,7 @@ static uint8_t flash_write_failed = 0; /* Flash 写入失败标志 */
 /**
  * @brief 检查当前 Flash 中的 APP 是否有效
  * @return true 有效，false 无效
- * @note 用户需根据实际硬件实现（CRC、签名等）
+ * @note
  */
 bool CheckAppValid(void) {
   uint32_t magic = *(volatile uint32_t *)MAGIC_ADDR;
@@ -22,7 +22,7 @@ bool CheckAppValid(void) {
 
 /**
  * @brief 跳转到应用程序
- * @note 该函数在验证 APP 有效后调用，用于跳转到应用程序入口
+ * @note 该函数在验证 APP
  */
 void BootJumpAPP(void) {
   if (!CheckAppValid())
@@ -38,38 +38,31 @@ void BootJumpAPP(void) {
   if (sp < 0x20000000UL || sp > 0x20010000UL)
     return;
 
-  // 校验 PC 在 APP Flash 范围内
+  // 校验 PC 指针是否在 APP Flash 范围
   if (pc < APP_ADDRESS || pc >= (APP_ADDRESS + APP_SIZE))
     return;
 
-  // 复位 RCC 时钟配置：切回 HSI，关闭 PLL/HSE，恢复复位默认值
   HAL_RCC_DeInit();
-  // 反初始化所有 HAL 外设
+
   HAL_DeInit();
 
-  // 关闭所有外设中断并清除挂起位
   for (int i = 0; i < 2; i++) {
     NVIC->ICER[i] = 0xFFFFFFFFUL;
     NVIC->ICPR[i] = 0xFFFFFFFFUL;
   }
 
-  // 4. 完全复位 SysTick
   SysTick->CTRL = 0;
   SysTick->LOAD = 0;
   SysTick->VAL = 0;
 
-  // 清除系统异常挂起位
   SCB->ICSR |= SCB_ICSR_PENDSVCLR_Msk | SCB_ICSR_PENDSTCLR_Msk;
 
-  // 关全局中断 + 指令同步
   __disable_irq();
   __DSB();
   __ISB();
 
-  // 重定向中断向量表
   SCB->VTOR = APP_ADDRESS;
 
-  // 设置 MSP，绑定跳转入口
   __set_MSP(sp);
   Jump_To_Application = (pFunction)pc;
 
@@ -77,7 +70,6 @@ void BootJumpAPP(void) {
   __enable_irq();
   Jump_To_Application();
 
-  // 兜底：跳转失败则死循环（正常不会执行到这里）
   while (1)
     ;
 }
@@ -88,9 +80,9 @@ void BootJumpAPP(void) {
 uint32_t ReturnCurrentAddr(void) { return current_addr; }
 
 /*
- *@brief  获取指定地址所在的 Flash 扇区号
+ *@brief  获取指定地址所在的 Flash 扇区
  *@param  addr: Flash 地址
- *@retval 扇区号（0~5）
+ *@retval 扇区号（0~5)
  */
 static inline uint32_t GetSector(uint32_t addr) {
   if (addr <= SECTOR_0_END)
@@ -107,8 +99,8 @@ static inline uint32_t GetSector(uint32_t addr) {
 }
 
 /*
- * @brief 写入单个 32 位字到 Flash
- * @param addr: 目标地址（必须 4 字节对齐）
+ * @brief 写入单个 32 位进入 Flash
+ * @param addr: 目标地址（必须 4 字节对齐)
  * @param data: 32 位待写入数据
  * @return 返回写入状态
  */
@@ -116,11 +108,11 @@ static uint8_t Flash_WriteWord(uint32_t addr, uint32_t data) {
   // 32 位字写入要求 4 字节对齐
   if (addr & 0x3UL)
     return BL_WRITE_ERROR;
-  // 地址越界检查（预留 3 字节余量，保证单字写入不超 Flash 范围）
+
   if (addr > (FLASH_END - 3UL))
     return BL_WRITE_ERROR;
 
-  // 写入前清空所有错误标志
+  // 写入前清空所有错误标
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                          FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR |
                          FLASH_FLAG_PGSERR);
@@ -139,17 +131,17 @@ static uint8_t Flash_WriteWord(uint32_t addr, uint32_t data) {
 }
 
 /*
- * @brief 将单个字节送入 4 字节缓存，凑满后写入 Flash 单字
+ * @brief 将单个字节送入 4 字节缓存，凑满后写入
+ * Flash 单字
  * @param byte: 待写入的字节
  * @return 写入状态
- * @note 该函数不做中断管理，调用者需保证原子性
  */
 static uint8_t Flash_WriteByte(uint8_t byte) {
   /* 将新字节存入缓存（小端模式） */
   ((uint8_t *)&write_cache)[cache_bytes] = byte;
   cache_bytes++;
 
-  /* 凑满 4 字节，执行一次单字写入 */
+  /* 凑满 4 字节，执行一次单字写 */
   if (cache_bytes == 4) {
     if (Flash_WriteWord(current_addr, write_cache) != BL_OK) {
       ULOG_ERROR("Failed to write word to Flash at address 0x%08lX",
@@ -167,12 +159,12 @@ static uint8_t Flash_WriteByte(uint8_t byte) {
  * @brief 解压输出回调：将解压出的字节写入 Flash
  * @param out: 解压输出数据
  * @param len: 数据长度
- * @return 实际处理的字节数（写失败时返回小于 len 以中止解压）
- * @note 超出 fw_size 的多余字节（末包填充产生的垃圾）会被丢弃，保证大小校验正确
+ * @return 实际处理的字节数
  */
 static size_t Bootloader_DecodeSink(const uint8_t *out, size_t len) {
   for (size_t i = 0; i < len; i++) {
-    /* 已写满预期大小，丢弃填充产生的多余输出 */
+    /* 已写满预期大小，丢弃填充产生的多余输
+     */
     if (decoded_total >= fw_size)
       break;
 
@@ -186,11 +178,13 @@ static size_t Bootloader_DecodeSink(const uint8_t *out, size_t len) {
 }
 
 /*
- * @brief 初始化 Bootloader
+ * @brief 初始 Bootloader
  * @return 返回初始化状态
  */
 uint8_t Bootloader_Init(void) {
-  /* 使能 Flash 接口时钟（HAL 已自动处理），只需解锁清除错误标志 */
+  /* 使能 Flash 接口时钟（HAL
+   * 已自动处理），只需解锁清除错误标志
+   */
   HAL_FLASH_Unlock();
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                          FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR |
@@ -200,7 +194,7 @@ uint8_t Bootloader_Init(void) {
 }
 
 /*
- * @brief 擦除应用程序区域的 Flash
+ * @brief 擦除应用程序区域 Flash
  * @return 返回擦除状态
  */
 uint8_t Bootloader_Erase(void) {
@@ -210,17 +204,15 @@ uint8_t Bootloader_Erase(void) {
 
   HAL_FLASH_Unlock();
 
-  /* 配置擦除参数：从扇区 2 开始，擦除 4 个扇区（2,3,4,5） */
   erase_init.TypeErase = FLASH_TYPEERASE_SECTORS;
   erase_init.Sector = APP_SECTOR_START;
   erase_init.NbSectors = APP_SECTOR_COUNT;
-  erase_init.VoltageRange = FLASH_VOLTAGE_RANGE_3; /* F401 固定为 3 */
+  erase_init.VoltageRange = FLASH_VOLTAGE_RANGE_3; /* F401 固定�? 3 */
 
-  /* 关闭全局中断（防止擦除期间中断触发） */
   __disable_irq();
 
   HAL_StatusTypeDef status = HAL_FLASHEx_Erase(&erase_init, &sector_error);
-  // 解锁后立即清除所有错误标志 + EOP 标志，确保状态寄存器干净
+
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                          FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR |
                          FLASH_FLAG_PGSERR);
@@ -248,11 +240,10 @@ uint8_t Bootloader_FlashBegin(void) {
   decoded_total = 0;
   is_first = 1;
 
-  /* 复位解压器，保证每次升级/重试重新开始 */
   boot_decode_init();
 
   HAL_FLASH_Unlock();
-  // 解锁后立即清除所有错误标志 + EOP 标志，确保状态寄存器干净
+
   __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_EOP | FLASH_FLAG_OPERR | FLASH_FLAG_WRPERR |
                          FLASH_FLAG_PGAERR | FLASH_FLAG_PGPERR |
                          FLASH_FLAG_PGSERR);
@@ -262,9 +253,8 @@ uint8_t Bootloader_FlashBegin(void) {
 /*
  *@brief 写入数据到 Flash（以 8 字节为单位写入）
  *@param data: 指向要写入的数据缓冲区
- *@param len: 数据长度（字节数）
+ *@param len: 数据长度
  *@return 返回写入状态
- *@note 该函数会缓存数据，直到缓存满 8 字节才执行实际写入操作
  */
 uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len) {
   ULOG_DEBUG("Writing data to Flash and the length is %d", len);
@@ -283,7 +273,7 @@ uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len) {
     fw_size = (uint32_t)data[0] | ((uint32_t)data[1] << 8) |
               ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
 
-    // 合法性检查：解压后大小必须落在 APP 区域内
+    // 合法性检查：解压后大小必须落在 APP 区域
     if (fw_size == 0 || fw_size > APP_SIZE) {
       __enable_irq();
       return BL_SIZE_ERROR;
@@ -294,7 +284,6 @@ uint8_t Bootloader_FlashWriteBuffer(uint8_t *data, uint16_t len) {
     is_first = 0;
   }
 
-  /* 解压压缩数据并写入 Flash */
   flash_write_failed = 0;
   if (boot_decode_stream(data, len, Bootloader_DecodeSink) == (size_t)-1) {
     __enable_irq();
@@ -323,11 +312,11 @@ uint8_t Bootloader_FlashEnd(void) {
   }
   __enable_irq();
 
-  /* 处理剩余缓存数据（不足 4 字节时，高位填充 0xFF） */
+  // 处理剩余缓存数据(不足 4 字节时，高位填充 0xFF)
   if (cache_bytes > 0) {
     // 剩余不足 4 字节时，高位填充 0xFF
     uint32_t word_to_write = 0xFFFFFFFFUL;
-    // 有效字节复制到低位（小端模式）
+    // 有效字节复制到低位（小端模式)
     for (uint8_t i = 0; i < cache_bytes; i++) {
       ((uint8_t *)&word_to_write)[i] = ((uint8_t *)&write_cache)[i];
     }

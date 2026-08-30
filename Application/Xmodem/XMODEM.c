@@ -1,17 +1,17 @@
 #include "XMODEM.h"
 
-/* ---------- ±äÁ¿¶¨Òå ---------- */
+/* ---------- å˜é‡å®šä¹‰ ---------- */
 uint8_t dma_rx_buf[DMA_RX_BUF_SIZE];
-volatile uint16_t dma_read_idx = 0;  // Ö÷Ñ­»·ÒÑ´¦ÀíÎ»ÖÃ
-volatile uint16_t dma_write_idx = 0; // DMA µ±Ç°Ğ´ÈëÎ»ÖÃ
+volatile uint16_t dma_read_idx = 0;  // ä¸»å¾ªç¯å·²å¤„ç†ä½ç½®
+volatile uint16_t dma_write_idx = 0; // DMA å½“å‰å†™å…¥ä½ç½®
 
 static uint16_t XMODEM_CRC16_Ring(uint16_t offset, uint16_t len) {
-  uint16_t crc = 0x0000;        // XMODEM ±ê×¼³õÖµ
-  const uint16_t poly = 0x1021; // CCITT ¶àÏîÊ½
+  uint16_t crc = 0x0000;        // XMODEM æ ‡å‡†åˆå€¼
+  const uint16_t poly = 0x1021; // CCITT å¤šé¡¹å¼
 
   for (uint16_t i = 0; i < len; i++) {
     uint8_t byte = dma_rx_buf[(dma_read_idx + offset + i) % DMA_RX_BUF_SIZE];
-    crc ^= (uint16_t)byte << 8; // ×Ö½ÚÒì»òµ½¸ß×Ö½Ú
+    crc ^= (uint16_t)byte << 8; // å­—èŠ‚å¼‚æˆ–åˆ°é«˜å­—èŠ‚
     for (uint8_t bit = 0; bit < 8; bit++) {
       if (crc & 0x8000) {
         crc = (crc << 1) ^ poly;
@@ -29,9 +29,7 @@ static bool XMODEM_Send_Byte(XMODEM_Device *dev, uint8_t ch) {
 }
 
 static void XMODEM_Send_ACK(XMODEM_Device *dev) { XMODEM_Send_Byte(dev, 0x06); }
-static void XMODEM_Send_NAK(XMODEM_Device *dev) {
-   XMODEM_Send_Byte(dev, 0x15);
-}
+static void XMODEM_Send_NAK(XMODEM_Device *dev) { XMODEM_Send_Byte(dev, 0x15); }
 static void XMODEM_Send_CAN(XMODEM_Device *dev) {
   XMODEM_Send_Byte(dev, 0x18);
   XMODEM_Send_Byte(dev, 0x18);
@@ -46,8 +44,9 @@ static uint16_t XMODEM_Return_ReadIDX(uint16_t inc) {
 }
 
 static uint16_t XMODEM_Get_Valid_Length() {
-  uint16_t size = (dma_write_idx - dma_read_idx + DMA_RX_BUF_SIZE) % DMA_RX_BUF_SIZE;
-	return size;
+  uint16_t size =
+      (dma_write_idx - dma_read_idx + DMA_RX_BUF_SIZE) % DMA_RX_BUF_SIZE;
+  return size;
 }
 
 void XMODEM_Init(XMODEM_Device *dev, UART_HandleTypeDef *huart,
@@ -75,7 +74,7 @@ void XMODEM_StartReceive(XMODEM_Device *dev) {
   HAL_UART_Abort(dev->huart);
 
   __HAL_UART_CLEAR_IDLEFLAG(dev->huart);
-  __HAL_UART_CLEAR_OREFLAG(dev->huart); // Çå³ıÒç³ö±êÖ¾
+  __HAL_UART_CLEAR_OREFLAG(dev->huart); // æ¸…é™¤æº¢å‡ºæ ‡å¿—
   while (HAL_UARTEx_ReceiveToIdle_DMA(dev->huart, dma_rx_buf,
                                       DMA_RX_BUF_SIZE - 1) != HAL_OK) {
   }
@@ -88,8 +87,8 @@ void XMODEM_Poll(XMODEM_Device *dev) {
     return;
 
   while (XMODEM_Get_Valid_Length() > 0) {
-    uint8_t head = dma_rx_buf[dma_read_idx]; // ¶ÁÈ¡Í·×Ö·û
-    // ÓĞÏŞ´¦ÀíÌØÊâ×Ö·û
+    uint8_t head = dma_rx_buf[dma_read_idx]; // è¯»å–å¤´å­—ç¬¦
+    // æœ‰é™å¤„ç†ç‰¹æ®Šå­—ç¬¦
     if (head == 0x04) { // EOT
       XMODEM_DMA_AddIDX(1);
       XMODEM_Send_ACK(dev);
@@ -99,27 +98,27 @@ void XMODEM_Poll(XMODEM_Device *dev) {
     }
     if (head == 0x18) { // CAN
       XMODEM_DMA_AddIDX(1);
-      // ÈôÁ¬ĞøÁ½¸ö CAN£¬¿ÉÊÓÎªÈ¡Ïû£¬ÕâÀï¼òµ¥´¦Àí
+      // è‹¥è¿ç»­ä¸¤ä¸ª CANï¼Œå¯è§†ä¸ºå–æ¶ˆï¼Œè¿™é‡Œç®€å•å¤„ç†
       dev->can_received = true;
       dev->receiving = false;
       return;
     }
     uint16_t data_len;
     uint16_t frame_len;
-    // ´¦ÀíÍ·×Ö·û
+    // å¤„ç†å¤´å­—ç¬¦
     if (head == 0x01) {
       data_len = 128;
       frame_len = 128 + 5;
-    }else if (head == 0x02) { // STX
+    } else if (head == 0x02) { // STX
       data_len = DATA_LEN;
       frame_len = FRAME_LEN;
     } else {
       XMODEM_DMA_AddIDX(1);
       continue;
     }
-    // Êı¾İÖ¡²»ÍêÕû£¬µÈ´ıÏÂÒ»ÂÖ
+    // æ•°æ®å¸§ä¸å®Œæ•´ï¼Œç­‰å¾…ä¸‹ä¸€è½®
     if (XMODEM_Get_Valid_Length() < frame_len) {
-      // ¼ì²é³¬Ê±
+      // æ£€æŸ¥è¶…æ—¶
       if (HAL_GetTick() - dev->last_byte_tick >= dev->timeout_ms) {
         if (dev->retry_count < dev->max_retry) {
           XMODEM_Send_NAK(dev);
@@ -131,16 +130,16 @@ void XMODEM_Poll(XMODEM_Device *dev) {
       }
       return;
     }
-    // ¶ÁÈ¡°üĞòºÅ¼°·´Âë
+    // è¯»å–åŒ…åºå·åŠåç 
     uint8_t block_num = dma_rx_buf[XMODEM_Return_ReadIDX(1)];
     uint8_t inverse_num = dma_rx_buf[XMODEM_Return_ReadIDX(2)];
-    // ĞòºÅ·´ÂëĞ£Ñé
+    // åºå·åç æ ¡éªŒ
     if ((uint8_t)(block_num + inverse_num) != 0xFF) {
-      // Ö¡Í·¿ÉÄÜÎóÅĞ£¬»¬¶¯Ò»¸ö×Ö½Ú¼ÌĞøÕÒÏÂÒ»¸ö SOH/STX
+      // å¸§å¤´å¯èƒ½è¯¯åˆ¤ï¼Œæ»‘åŠ¨ä¸€ä¸ªå­—èŠ‚ç»§ç»­æ‰¾ä¸‹ä¸€ä¸ª SOH/STX
       XMODEM_DMA_AddIDX(1);
       continue;
     }
-    // ĞòºÅ´¦Àí
+    // åºå·å¤„ç†
     if (block_num != dev->packet_num) {
       if (block_num == (uint8_t)(dev->packet_num - 1)) {
         XMODEM_Send_ACK(dev);
@@ -152,18 +151,18 @@ void XMODEM_Poll(XMODEM_Device *dev) {
           return;
         }
       }
-      // ¶ªÆúÕû¸öÖ¡£¨ÎŞÂÛÖØ¸´»¹ÊÇ´íÎó£©
+      // ä¸¢å¼ƒæ•´ä¸ªå¸§ï¼ˆæ— è®ºé‡å¤è¿˜æ˜¯é”™è¯¯ï¼‰
       XMODEM_DMA_AddIDX(frame_len);
       continue;
     }
-    // CRC Ğ£Ñé
+    // CRC æ ¡éªŒ
     uint16_t cal_crc = XMODEM_CRC16_Ring(3, data_len);
     uint8_t crc_hi = dma_rx_buf[XMODEM_Return_ReadIDX(3 + data_len)];
     uint8_t crc_lo = dma_rx_buf[XMODEM_Return_ReadIDX(3 + data_len + 1)];
     uint16_t recv_crc = ((uint16_t)crc_hi << 8) | crc_lo;
 
     if (cal_crc != recv_crc) {
-      // CRC ´íÎó£¬¶ªÆúÕû¸öÖ¡£¬ÇëÇóÖØ·¢
+      // CRC é”™è¯¯ï¼Œä¸¢å¼ƒæ•´ä¸ªå¸§ï¼Œè¯·æ±‚é‡å‘
       XMODEM_DMA_AddIDX(frame_len);
       if (dev->retry_count < dev->max_retry) {
         XMODEM_Send_NAK(dev);
@@ -173,24 +172,24 @@ void XMODEM_Poll(XMODEM_Device *dev) {
       }
       continue;
     }
-    // ½«Êı¾İ¿½±´µ½Á¬Ğø»º³åÇø dev->rx_buf£¨±ÜÃâ»·ĞÎÔ½½ç£©
+    // å°†æ•°æ®æ‹·è´åˆ°è¿ç»­ç¼“å†²åŒº dev->rx_bufï¼ˆé¿å…ç¯å½¢è¶Šç•Œï¼‰
     for (uint16_t i = 0; i < data_len; i++) {
       dev->rx_buf[i] = dma_rx_buf[XMODEM_Return_ReadIDX(3 + i)];
     }
-    // Ö¡ÕıÈ·£ºĞ´ÈëÊı¾İ
+    // å¸§æ­£ç¡®ï¼šå†™å…¥æ•°æ®
     if (dev->write_cb != NULL) {
       dev->write_cb(dev->rx_buf, data_len);
     }
     dev->total_bytes += data_len;
     dev->packet_num++;
-    // ·¢ËÍ ACK
+    // å‘é€ ACK
     XMODEM_Send_ACK(dev);
-    // ³É¹¦½ÓÊÕÒ»Ö¡£¬ÇåÁãÖØÊÔ¼ÆÊı
+    // æˆåŠŸæ¥æ”¶ä¸€å¸§ï¼Œæ¸…é›¶é‡è¯•è®¡æ•°
     dev->retry_count = 0;
-    // ¶ªÆúÒÑ´¦ÀíµÄÖ¡
+    // ä¸¢å¼ƒå·²å¤„ç†çš„å¸§
     XMODEM_DMA_AddIDX(frame_len);
   }
-  // ÎŞÊı¾İ£º¼ì²é³¬Ê±
+  // æ— æ•°æ®ï¼šæ£€æŸ¥è¶…æ—¶
   if (XMODEM_Get_Valid_Length() == 0) {
     if (HAL_GetTick() - dev->last_byte_tick >= dev->timeout_ms) {
       if (dev->retry_count < dev->max_retry) {

@@ -17,7 +17,7 @@ extern "C" {
 #define VERSION_INFO_ADDR (END_ADDRESS - VERSION_INFO_SIZE + 1)
 
 /**
- * @brief 版本信息结构体（紧凑布局，无填充）
+ * @brief 版本信息结构体
  */
 typedef struct __attribute__((packed)) {
   uint16_t app_ver_major; /*!< APP 主版本号 */
@@ -27,8 +27,6 @@ typedef struct __attribute__((packed)) {
   uint32_t app_end_addr; /*!< APP 实际结束地址（APP_ADDRESS + 固件大小） */
   uint32_t crc32; /*!< APP 固件 CRC32 校验值（可选，0 表示无效） */
 } version_info_t;
-
-/* ======================= 函数定义（内联实现） ======================= */
 
 /**
  * @brief  从 Flash 读取版本信息
