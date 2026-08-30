@@ -119,6 +119,16 @@ BootEvent ProgUpgrade_Do(void) {
       return EVENT_BURN_COMPLETE_APP_INVALID;
     }
   }
+  // 超时检测
+  if (IsTimeout()) {
+    ULOG_INFO("Timeout in STATE_PROG_UPGRADE");
+    StopTimeout();
+    if (CheckAppValid())
+      return EVENT_TIMEOUT_APP_VALID;
+    else
+      return EVENT_TIMEOUT_APP_INVALID;
+  }
+
   return EVENT_NONE;
 }
 
